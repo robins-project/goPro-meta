@@ -128,7 +128,11 @@ namespace gpmf_to_yaml
 
     // sample images at desired framerate
     std::cout << "Sampling images at desired framerate..." << std::endl;
-    ret = populate_images();
+    // interpolate sensor metadata to adjust to image sampling rate
+    std::cout << "Interpolating sensors and populating sensor frames..." << std::endl;
+    // create yaml database in the output folder with the metadata for each img
+    std::cout << "Creating metadata yaml dict..." << std::endl;
+    ret = populate_images(out);
     if(ret)
     {
       std::cout << "Error populating images. Exiting..." << std::endl;
@@ -138,33 +142,6 @@ namespace gpmf_to_yaml
     {
       std::cout << "Done sampling images at desired framerate." << std::endl << std::endl ;
     }
-
-    // interpolate sensor metadata to adjust to image sampling rate
-    std::cout << "Interpolating sensors and populating sensor frames..." << std::endl;
-    ret = sensors_to_sensorframes();
-    if(ret)
-    {
-      std::cout << "Error interpolating sensors. Exiting..." << std::endl;
-      return ret;
-    }
-    else
-    {
-      std::cout << "Done interpolating sensors." << std::endl << std::endl ;
-    }
-    
-    // create yaml database in the output folder with the metadata for each img
-    std::cout << "Creating metadata yaml dict..." << std::endl;
-    ret = sensorframes_to_yaml(out);
-    if(ret)
-    {
-      std::cout << "Error creating metadata yaml dict. Exiting..." << std::endl;
-      return ret;
-    }
-    else
-    {
-      std::cout << "Done creating metadata yaml dict." << std::endl << std::endl;
-    }
-
 
     return ret;
   }
@@ -183,7 +160,6 @@ namespace gpmf_to_yaml
     // empty the maps
     _gps.clear();
     _accel.clear ();
-    _sensor_frames.clear();
 
     return CONV_OK;
   }
@@ -417,7 +393,7 @@ namespace gpmf_to_yaml
     }
   }
   
-  int32_t converter::populate_images()
+  int32_t converter::populate_images(YAML::Emitter & out)
   {
     int32_t ret = CONV_OK;
 
@@ -458,8 +434,13 @@ namespace gpmf_to_yaml
       // populate a sensor frame for each image and put only timestamp for now
       // (interpolated gps, and other sensors will be populated later)
       sf.ts = real_ts+_idx_offset*step;
-      _sensor_frames[name] = sf;
-      DEBUG("ts: %.5f, real ts: %.5f, name: %s\n\n",timestep+_idx_offset*step,_sensor_frames[name].ts,name.c_str());
+
+      interpolate_data (sf.ts, _gps,   sf.gps);
+      interpolate_data (sf.ts, _accel, sf.accel);
+
+      sensorframes_to_yaml(out, name, sf, (idx == 0));
+
+      DEBUG("ts: %.5f, real ts: %.5f, name: %s\n\n",timestep+_idx_offset*step,sf.ts,name.c_str());
       idx++;
     }
     //final offset for next batch of files
@@ -467,28 +448,6 @@ namespace gpmf_to_yaml
     return ret;
   }
   
-  int32_t converter::sensors_to_sensorframes()
-  {
-    int32_t ret = CONV_OK;
-
-    // for each image and sensor frame in the map, get the closest 2 timestamps
-    // for each sensor map and interpolate its info.
-    for (auto& sf:_sensor_frames)
-    { 
-      DEBUG("\n\n");
-      DEBUG("Image sample name: %s.\n",sf.first.c_str());
-
-      // get the timestamp for image
-      float ts = sf.second.ts;
-
-      interpolate_data (ts, _gps,   sf.second.gps);
-      interpolate_data (ts, _accel, sf.second.accel);
-    }
-
-
-    return ret;
-  }
-
   void converter::interpolate_data(float ts, std::map<float,std::vector<float> >& in, float* out)
   {
     /*
@@ -548,62 +507,53 @@ namespace gpmf_to_yaml
     }
   }
   
-  int32_t converter::sensorframes_to_yaml(YAML::Emitter & out)
+  int32_t converter::sensorframes_to_yaml(YAML::Emitter&       out,
+                                          const std::string&   name,
+                                          const sensorframe_t& sf,
+                                          const bool           first)
   {
 
     int32_t ret = CONV_OK;
 
     //comments with some info about the program run
     //put every sensor frame in yaml file
-    bool first = true;
-    for (auto& sf:_sensor_frames)
+    // create entry for the file name
+    out << YAML::Key << name;
+    out << YAML::Value;
+
+    // if it is the first video of this file, comment where it was taken
+    if(first)
     {
-      // create entry for the file name
-      out << YAML::Key << sf.first;
-      out << YAML::Value;
-
-      // if it is the first video of this file, comment where it was taken
-      if(first)
-      {
-        out << YAML::Comment("Original File: "+_input+", Frame rate: "+std::to_string(_fr));
-        first=false;
-      }
-
-      // create timestamp
-      out << YAML::BeginMap;
-      out << YAML::Key << "ts";
-      out << YAML::Value << sf.second.ts;
-      
-      // output gps data
-      out << YAML::Key << "gps";
-      out << YAML::Value;
-
-      out << YAML::BeginMap;
-      out << YAML::Key << "lat" << YAML::Value << sf.second.gps[0];
-      out << YAML::Key << "long" << YAML::Value<< sf.second.gps[1];
-      out << YAML::Key << "alt" << YAML::Value << sf.second.gps[2];
-      out << YAML::Key << "2dv" << YAML::Value << sf.second.gps[3];
-      out << YAML::Key << "3dv" << YAML::Value << sf.second.gps[4]; 
-      out << YAML::EndMap;
-
-      out << YAML::Key << "accel";
-      out << YAML::Value;
-
-      out << YAML::BeginMap;
-      out << YAML::Key << "2dX" << YAML::Value << sf.second.accel[0];
-      out << YAML::Key << "2dY" << YAML::Value << sf.second.accel[1];
-      out << YAML::Key << "2dZ" << YAML::Value << sf.second.accel[2];
-      out << YAML::EndMap;
-      
-      out << YAML::EndMap;
+      out << YAML::Comment("Original File: "+_input+", Frame rate: "+std::to_string(_fr));
     }
 
-    // debug() impl makes no sense here because there is already a << 
-    // impl for the whole file
-    if(_verbose)
-    {
-      std::cout << out.c_str() << std::endl << std::endl;
-    }
+    // create timestamp
+    out << YAML::BeginMap;
+    out << YAML::Key << "ts";
+    out << YAML::Value << sf.ts;
+
+    // output gps data
+    out << YAML::Key << "gps";
+    out << YAML::Value;
+
+    out << YAML::BeginMap;
+    out << YAML::Key << "lat"  << YAML::Value << sf.gps[0];
+    out << YAML::Key << "long" << YAML::Value << sf.gps[1];
+    out << YAML::Key << "alt"  << YAML::Value << sf.gps[2];
+    out << YAML::Key << "2dv"  << YAML::Value << sf.gps[3];
+    out << YAML::Key << "3dv"  << YAML::Value << sf.gps[4];
+    out << YAML::EndMap;
+
+    out << YAML::Key << "accel";
+    out << YAML::Value;
+
+    out << YAML::BeginMap;
+    out << YAML::Key << "2dX" << YAML::Value << sf.accel[0];
+    out << YAML::Key << "2dY" << YAML::Value << sf.accel[1];
+    out << YAML::Key << "2dZ" << YAML::Value << sf.accel[2];
+    out << YAML::EndMap;
+
+    out << YAML::EndMap;
 
     return ret;
 

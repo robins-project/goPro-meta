@@ -64,7 +64,7 @@ if (yaml-cpp_FOUND)
 endif (yaml-cpp_FOUND)
 
 # opencv
-find_package(OpenCV REQUIRED)
+find_package(OpenCV 2.4.9.1 REQUIRED)
 if (OpenCV_FOUND)
   include_directories(${OpenCV_INCLUDE_DIRS})
   # message("OpenCV INCLUDE: ${OpenCV_INCLUDE_DIRS}")
@@ -72,3 +72,9 @@ if (OpenCV_FOUND)
   # message("OpenCV LIB: ${OpenCV_LIBRARIES}")
   message("-- OpenCV found! Version: ${OpenCV_VERSION}")
 endif (OpenCV_FOUND)
+
+find_package (catkin REQUIRED COMPONENTS rosbag roscpp topic_tools)
+catkin_package(INCLUDE_DIRS include CATKIN_DEPENDS rosbag roscpp topic_tools)
+include_directories (${catkin_INCLUDE_DIRS})
+target_link_libraries (${PROJECT_NAME} ${catkin_LIBRARIES})
+add_dependencies (${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})

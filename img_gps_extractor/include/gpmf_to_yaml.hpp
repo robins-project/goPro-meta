@@ -81,9 +81,11 @@ namespace gpmf_to_yaml
       
       // intermediate functions
       int32_t gpmf_to_maps(); // take in stream and build maps
-      int32_t populate_images(); // get still images at desired framerate
-      int32_t sensors_to_sensorframes(); // interpolate at desired framerate
-      int32_t sensorframes_to_yaml(YAML::Emitter & out); // output desired yaml
+      int32_t populate_images(YAML::Emitter & out); // get still images at desired framerate
+      int32_t sensorframes_to_yaml(YAML::Emitter&       out,
+                                   const std::string&   name,
+                                   const sensorframe_t& sf,
+                                   const bool           first); // output desired yaml
       void process_accel(const uint32_t index);
       void process_gps(const uint32_t index);
       void interpolate_data(float ts, std::map<float,std::vector<float> >& in, float* out);
@@ -93,7 +95,6 @@ namespace gpmf_to_yaml
       std::map<float,std::vector<float> > _accel; //ts is key, accel data is value
 
       //map for interpolated values
-      std::map<std::string,sensorframe_t> _sensor_frames; //this is what we store in yaml (key is image name, and value is a sensor frame)
       uint32_t _n_images; // final number of images in database
 
       // gpmf data
