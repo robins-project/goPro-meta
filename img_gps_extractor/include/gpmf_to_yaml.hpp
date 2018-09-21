@@ -94,7 +94,8 @@ namespace gpmf_to_yaml
 
       // gpmf data
       GPMF_stream _metadata_stream, *_ms;
-      float _metadatalength;
+      size_t _mp4;
+      double _metadatalength;
       uint32_t *_payload; //buffer to store GPMF samples from the MP4.
 
   };

@@ -23,7 +23,7 @@
 namespace gpmf_to_yaml
 {
 
-  converter::converter(bool verbose):_extractor()
+  converter::converter(bool verbose):_extractor(verbose)
   {
     // init some members
     _ms = &_metadata_stream;
@@ -49,10 +49,11 @@ namespace gpmf_to_yaml
     // init some members
     _ms = &_metadata_stream;
     _payload = NULL;
-    _metadatalength = OpenGPMFSource(const_cast<char*>(_input.c_str()));
+    _mp4 = OpenMP4Source(const_cast<char*>(_input.c_str()), MOV_GPMF_TRAK_TYPE, MOV_GPMF_TRAK_SUBTYPE);
+    _metadatalength = GetDuration (_mp4);
     if(_metadatalength > 0.0)
     {
-      uint32_t index, payloads = GetNumberGPMFPayloads();
+      uint32_t index, payloads = GetNumberPayloads(_mp4);
       std::cout << "Found " << _metadatalength << "s of metadata, from " 
                 << payloads << " payloads, within " << _input << std::endl;
     }
@@ -175,9 +176,9 @@ namespace gpmf_to_yaml
 
   int32_t converter::cleanup()
   {
-    if (_payload) FreeGPMFPayload(_payload);
+    if (_payload) FreePayload(_payload);
     _payload = NULL;
-    CloseGPMFSource();
+    CloseSource(_mp4);
 
     // empty the maps
     _gps.clear();
@@ -193,25 +194,25 @@ namespace gpmf_to_yaml
 
     if (_metadatalength > 0.0)
     {
-      uint32_t index, payloads = GetNumberGPMFPayloads();
+      uint32_t index, payloads = GetNumberPayloads(_mp4);
       for (index = 0; index < payloads; index++)
       {
-        uint32_t payloadsize = GetGPMFPayloadSize(index);
-        float in = 0.0, out = 0.0; //times
-        _payload = GetGPMFPayload(_payload, index);
+        uint32_t payloadsize = GetPayloadSize(_mp4, index);
+        float inPl = 0.0, outPl = 0.0; //times
+        _payload = GetPayload(_mp4, _payload, index);
         if (_payload == NULL)
         {
           cleanup();
           return CONV_NO_PAYLOAD;
         }
 
-        ret = GetGPMFPayloadTime(index, &in, &out);
+        ret = GetPayloadTime(_mp4, index, &inPl, &outPl);
         if (ret != GPMF_OK)
         {
           cleanup();
           return CONV_NO_PAYLOAD;
         }
-        DEBUG("MP4 Payload time %.3f to %.3f seconds\n", in, out);
+        DEBUG("MP4 Payload time %.3f to %.3f seconds\n", inPl, outPl);
 
         ret = GPMF_Init(_ms, _payload, payloadsize);
         if (ret != GPMF_OK)
@@ -231,7 +232,8 @@ namespace gpmf_to_yaml
 
             if (samples)
             {
-              float rate = GetGPMFSampleRateAndTimes(_ms, 0.0, index, &in, &out);
+              double in = 0.0, out = 0.0;
+              double rate = GetGPMFSampleRateAndTimes(_mp4, _ms, 0.0, index, &in, &out);
 
               DEBUG("  STRM of %c%c%c%c %.3f-%.3fs %.3fHz ", PRINTF_4CC(key), in, out, rate);
 
@@ -314,8 +316,8 @@ namespace gpmf_to_yaml
               std::vector<float> gps_sample;
 
               //get timestamp for that sample
-              float gps_rate,gps_start,gps_end;
-              gps_rate = 1/GetGPMFSampleRateAndTimes(_ms, 0.0, index, &gps_start, &gps_end);
+              double gps_rate,gps_start,gps_end;
+              gps_rate = 1/GetGPMFSampleRateAndTimes(_mp4, _ms, 0.0, index, &gps_start, &gps_end);
               _gps[gps_start+gps_rate*i]=gps_sample;
 
               //get all value for that sample (lat, long, etc)
