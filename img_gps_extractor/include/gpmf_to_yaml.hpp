@@ -53,7 +53,7 @@ namespace gpmf_to_yaml
     //gpsf // GPS fix? 0-no lock. 2 or 3, 2D or 3D lock
     //gpsp // GPS precision: Under 300 is good (tipically around 5m to 10m)
     //gyro // IMU Gyroscope data rad/s
-    //accel // IMU Accelerometer data m/s²
+    float accel[3]; // IMU Accelerometer data m/s²
     //isog // ISO gain (dimensionless)
     //ss // shutter speed in seconds
   }sensorframe_t;
@@ -84,9 +84,13 @@ namespace gpmf_to_yaml
       int32_t populate_images(); // get still images at desired framerate
       int32_t sensors_to_sensorframes(); // interpolate at desired framerate
       int32_t sensorframes_to_yaml(YAML::Emitter & out); // output desired yaml
+      void process_accel(const uint32_t index);
+      void process_gps(const uint32_t index);
+      void interpolate_data(float ts, std::map<float,std::vector<float> >& in, float* out);
 
       // maps for parsed values
       std::map<float,std::vector<float> > _gps; //ts is key, gps data is value
+      std::map<float,std::vector<float> > _accel; //ts is key, accel data is value
 
       //map for interpolated values
       std::map<std::string,sensorframe_t> _sensor_frames; //this is what we store in yaml (key is image name, and value is a sensor frame)

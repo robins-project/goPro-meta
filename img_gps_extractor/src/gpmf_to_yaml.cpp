@@ -182,6 +182,7 @@ namespace gpmf_to_yaml
 
     // empty the maps
     _gps.clear();
+    _accel.clear ();
     _sensor_frames.clear();
 
     return CONV_OK;
@@ -274,72 +275,146 @@ namespace gpmf_to_yaml
         GPMF_ResetState(_ms);
         DEBUG("\n"); 
 
-        // Find GPS values and return scaled floats. 
-        if (GPMF_OK == GPMF_FindNext(_ms, STR2FOURCC("GPS5"), GPMF_RECURSE_LEVELS)) //GoPro Hero5 GPS
+        do
         {
-          uint32_t samples = GPMF_Repeat(_ms);
-          uint32_t elements = GPMF_ElementsInStruct(_ms);
-          uint32_t buffersize = samples * elements * sizeof(float);
-          GPMF_stream find_stream;
-          float *ptr, *tmpbuffer = static_cast<float*>(malloc(buffersize));
-          char units[10][6] = { "" };
-          uint32_t unit_samples = 1;
-
-          if (tmpbuffer && samples)
+          switch (GPMF_Key (_ms))
           {
-            uint32_t i, j;
+            case STR2FOURCC ("ACCL"):
+              process_accel (index);
+              break;
 
-            //Search for any units to display
-            GPMF_CopyState(_ms, &find_stream);
-            if (GPMF_OK == GPMF_FindPrev(&find_stream, GPMF_KEY_SI_UNITS, GPMF_CURRENT_LEVEL) ||
-              GPMF_OK == GPMF_FindPrev(&find_stream, GPMF_KEY_UNITS, GPMF_CURRENT_LEVEL))
-            {
-              char *data = (char *)GPMF_RawData(&find_stream);
-              int ssize = GPMF_StructSize(&find_stream);
-              unit_samples = GPMF_Repeat(&find_stream);
-
-              for (i = 0; i < unit_samples; i++)
-              {           
-                memcpy(units[i], data, ssize);
-                units[i][ssize] = 0;
-                data += ssize;
-              }
-            }
-
-            //GPMF_FormattedData(_ms, tmpbuffer, buffersize, 0, samples); // Output data in LittleEnd, but no scale
-            GPMF_ScaledData(_ms, tmpbuffer, buffersize, 0, samples, GPMF_TYPE_FLOAT);  //Output scaled data as floats
-
-            ptr = tmpbuffer;
-            for (i = 0; i < samples; i++)
-            {
-              // create gps_sample to store in map
-              std::vector<float> gps_sample;
-
-              //get timestamp for that sample
-              double gps_rate,gps_start,gps_end;
-              gps_rate = 1/GetGPMFSampleRateAndTimes(_mp4, _ms, 0.0, index, &gps_start, &gps_end);
-              _gps[gps_start+gps_rate*i]=gps_sample;
-
-              //get all value for that sample (lat, long, etc)
-              DEBUG("TIME: %.3fs - ",gps_start+gps_rate*i);
-              for (j = 0; j < elements; j++)
-              {
-                _gps[gps_start+gps_rate*i].push_back(*ptr++);
-                DEBUG("%.6f%s, " ,_gps[gps_start+gps_rate*i][j], units[j%unit_samples]);
-              }
-              DEBUG("\n");              
-            }
-            free(tmpbuffer);
+            case STR2FOURCC ("GPS5"):
+            case STR2FOURCC ("GPRI"):
+              process_gps (index);
+              break;
           }
         }
+        while (GPMF_OK == GPMF_Next (_ms, GPMF_RECURSE_LEVELS));
+
         GPMF_ResetState(_ms);
-        DEBUG("\n"); 
-
+        DEBUG("\n");
       }
-
     }
 
     return ret;
+  }
+
+  void converter::process_accel(const uint32_t index)
+  {
+    const char     aType         = GPMF_Type            (_ms);
+    const uint32_t aComponentsNb = GPMF_ElementsInStruct(_ms);
+    const uint32_t aSamplesNb    = GPMF_Repeat          (_ms);
+    const uint32_t aBufferSize   = aComponentsNb * aSamplesNb * sizeof(double);
+
+    double *aBuffer = static_cast<double*>(malloc (aBufferSize));
+    if (aBuffer && aSamplesNb)
+    {
+      char*    aUnitsBuffer   = NULL;
+      uint32_t aUnitSamplesNb = 1;
+
+      //Search for any units to display
+      GPMF_stream find_stream;
+      GPMF_CopyState(_ms, &find_stream);
+      if (GPMF_OK == GPMF_FindPrev(&find_stream, GPMF_KEY_SI_UNITS, GPMF_CURRENT_LEVEL) ||
+          GPMF_OK == GPMF_FindPrev(&find_stream, GPMF_KEY_UNITS,    GPMF_CURRENT_LEVEL))
+      {
+        char*  aUnitsData = static_cast<char*>(GPMF_RawData (&find_stream));
+        const int aLength = GPMF_StructSize     (&find_stream);
+        aUnitSamplesNb    = GPMF_Repeat         (&find_stream);
+
+        aUnitsBuffer = static_cast<char*>(malloc ((aLength + 1) * aUnitSamplesNb));
+        for (uint32_t i = 0; i < aUnitSamplesNb; i++)
+        {
+          memcpy(&aUnitsBuffer[i * aLength], aUnitsData, aLength);
+          aUnitsBuffer[i * (aLength + 1) + aLength] = 0;
+          aUnitsData += aLength;
+        }
+      }
+
+      GPMF_ScaledData(_ms, aBuffer, aBufferSize, 0, aSamplesNb, GPMF_TYPE_DOUBLE);  //Output scaled data as floats
+
+      for (uint32_t i = 0; i < aSamplesNb; i++)
+      {
+        DEBUG("%c%c%c%c ", PRINTF_4CC(GPMF_Key (_ms)));
+
+        std::vector<float> accel_sample;
+
+        //get timestamp for that sample
+        double accel_rate,accel_start,accel_end;
+        accel_rate = 1/GetGPMFSampleRateAndTimes(_mp4, _ms, 0.0, index, &accel_start, &accel_end);
+        _accel[accel_start+accel_rate*i]=accel_sample;
+
+        //get all value for that sample (lat, long, etc)
+        DEBUG("TIME: %.3fs - ",accel_start+accel_rate*i);
+        for (uint32_t j = 0; j < aComponentsNb; j++)
+        {
+          _accel[accel_start+accel_rate*i].push_back(aBuffer[i * aComponentsNb + j]);
+          DEBUG("%.6f%s, " ,_accel[accel_start+accel_rate*i][j], &aUnitsBuffer[j % aUnitSamplesNb]);
+        }
+        DEBUG("\n");
+      }
+
+      free (aUnitsBuffer);
+      free (aBuffer);
+    }
+  }
+
+  void converter::process_gps(const uint32_t index)
+  {
+    uint32_t samples = GPMF_Repeat(_ms);
+    uint32_t elements = GPMF_ElementsInStruct(_ms);
+    uint32_t buffersize = samples * elements * sizeof(float);
+    GPMF_stream find_stream;
+    float *ptr, *tmpbuffer = static_cast<float*>(malloc(buffersize));
+    char units[10][6] = { "" };
+    uint32_t unit_samples = 1;
+
+    if (tmpbuffer && samples)
+    {
+      uint32_t i, j;
+
+      //Search for any units to display
+      GPMF_CopyState(_ms, &find_stream);
+      if (GPMF_OK == GPMF_FindPrev(&find_stream, GPMF_KEY_SI_UNITS, GPMF_CURRENT_LEVEL) ||
+        GPMF_OK == GPMF_FindPrev(&find_stream, GPMF_KEY_UNITS, GPMF_CURRENT_LEVEL))
+      {
+        char *data = (char *)GPMF_RawData(&find_stream);
+        int ssize = GPMF_StructSize(&find_stream);
+        unit_samples = GPMF_Repeat(&find_stream);
+
+        for (i = 0; i < unit_samples; i++)
+        {
+          memcpy(units[i], data, ssize);
+          units[i][ssize] = 0;
+          data += ssize;
+        }
+      }
+
+      //GPMF_FormattedData(_ms, tmpbuffer, buffersize, 0, samples); // Output data in LittleEnd, but no scale
+      GPMF_ScaledData(_ms, tmpbuffer, buffersize, 0, samples, GPMF_TYPE_FLOAT);  //Output scaled data as floats
+
+      ptr = tmpbuffer;
+      for (i = 0; i < samples; i++)
+      {
+        // create gps_sample to store in map
+        std::vector<float> gps_sample;
+
+        //get timestamp for that sample
+        double gps_rate,gps_start,gps_end;
+        gps_rate = 1/GetGPMFSampleRateAndTimes(_mp4, _ms, 0.0, index, &gps_start, &gps_end);
+        _gps[gps_start+gps_rate*i]=gps_sample;
+
+        //get all value for that sample (lat, long, etc)
+        DEBUG("TIME: %.3fs - ",gps_start+gps_rate*i);
+        for (j = 0; j < elements; j++)
+        {
+          _gps[gps_start+gps_rate*i].push_back(*ptr++);
+          DEBUG("%.6f%s, " ,_gps[gps_start+gps_rate*i][j], units[j%unit_samples]);
+        }
+        DEBUG("\n");
+      }
+      free(tmpbuffer);
+    }
   }
   
   int32_t converter::populate_images()
@@ -405,66 +480,72 @@ namespace gpmf_to_yaml
 
       // get the timestamp for image
       float ts = sf.second.ts;
-      
-      /* 
-        Get gps info right before and right after that timestamp.
-        Special cases are first image and last image, that may not 
-        have 2 data points, so we get the closest one. First case never
-        happens to us because first frame of opencv video is always 0.0 and 
-        same for gopro sensor data. Also the astronomical chance that a sensor
-        ts coincides with sample time of image.
-      */
-      float prev_ts=_gps.begin()->first, next_ts=_gps.rbegin()->first, delta_ts;
-      float interp_gps[5];
-      
-      // this covers the general case (middle of file) and the coincidence
-      for(auto const& sample: _gps)
-      {
-        if(sample.first < ts)
-        {
-          prev_ts = sample.first;
-        }
-        else if(sample.first > ts)
-        {
-          next_ts = sample.first;
-          break;
-        }
-        else //same
-        {
-          prev_ts = sample.first;
-          next_ts = sample.first;
-          break;
-        }
-      }
 
-      DEBUG("      prev gps ts: %.10f.\n",prev_ts);
-      DEBUG("           img ts: %.10f.\n",sf.second.ts);
-      DEBUG("      next gps ts: %.10f.\n",next_ts);
-
-      // interpolate for each one, taking into consideration the 0 delta case,
-      // which happens when gps frame coincides with image sample, and in the 
-      // last image, which may not have gps data after it.
-      for(int i=0; i<5; i++)
-      {
-        if(next_ts>prev_ts)
-        {
-          delta_ts = next_ts - prev_ts; // delta ts
-          float m = (_gps[next_ts][i] - _gps[prev_ts][i]) / delta_ts;
-          sf.second.gps[i] = _gps[prev_ts][i] + m * (ts - prev_ts);
-        }
-        else
-        {
-          // DEBUG("-------------------Same ts!\n");
-          sf.second.gps[i] = _gps[prev_ts][i];
-        }
-        DEBUG("      prev gps[%d]: %.10f.\n",i,_gps[prev_ts][i]);
-        DEBUG("  Interpolated[%d]: %.10f.\n",i,sf.second.gps[i]);
-        DEBUG("      next gps[%d]: %.10f.\n",i,_gps[next_ts][i]);
-      }
+      interpolate_data (ts, _gps,   sf.second.gps);
+      interpolate_data (ts, _accel, sf.second.accel);
     }
 
 
     return ret;
+  }
+
+  void converter::interpolate_data(float ts, std::map<float,std::vector<float> >& in, float* out)
+  {
+    /*
+      Get gps info right before and right after that timestamp.
+      Special cases are first image and last image, that may not
+      have 2 data points, so we get the closest one. First case never
+      happens to us because first frame of opencv video is always 0.0 and
+      same for gopro sensor data. Also the astronomical chance that a sensor
+      ts coincides with sample time of image.
+    */
+    float prev_ts=in.begin()->first, next_ts=in.rbegin()->first, delta_ts;
+
+    // this covers the general case (middle of file) and the coincidence
+    for(auto const& sample: in)
+    {
+      if(sample.first < ts)
+      {
+        prev_ts = sample.first;
+      }
+      else if(sample.first > ts)
+      {
+        next_ts = sample.first;
+        break;
+      }
+      else //same
+      {
+        prev_ts = sample.first;
+        next_ts = sample.first;
+        break;
+      }
+    }
+
+    DEBUG("      prev data ts: %.10f.\n",prev_ts);
+    DEBUG("            img ts: %.10f.\n",ts);
+    DEBUG("      next data ts: %.10f.\n",next_ts);
+
+    // interpolate for each one, taking into consideration the 0 delta case,
+    // which happens when gps frame coincides with image sample, and in the
+    // last image, which may not have gps data after it.
+    size_t dimNb = in.begin ()->second.size ();
+    for(int i=0; i<dimNb; i++)
+    {
+      if(next_ts>prev_ts)
+      {
+        delta_ts = next_ts - prev_ts; // delta ts
+        float m = (in[next_ts][i] - in[prev_ts][i]) / delta_ts;
+        out[i] = in[prev_ts][i] + m * (ts - prev_ts);
+      }
+      else
+      {
+        // DEBUG("-------------------Same ts!\n");
+        out[i] = in[prev_ts][i];
+      }
+      DEBUG("      prev data[%d]: %.10f.\n",i,in[prev_ts][i]);
+      DEBUG("   Interpolated[%d]: %.10f.\n",i,out[i]);
+      DEBUG("      next data[%d]: %.10f.\n",i,in[next_ts][i]);
+    }
   }
   
   int32_t converter::sensorframes_to_yaml(YAML::Emitter & out)
@@ -503,6 +584,15 @@ namespace gpmf_to_yaml
       out << YAML::Key << "alt" << YAML::Value << sf.second.gps[2];
       out << YAML::Key << "2dv" << YAML::Value << sf.second.gps[3];
       out << YAML::Key << "3dv" << YAML::Value << sf.second.gps[4]; 
+      out << YAML::EndMap;
+
+      out << YAML::Key << "accel";
+      out << YAML::Value;
+
+      out << YAML::BeginMap;
+      out << YAML::Key << "2dX" << YAML::Value << sf.second.accel[0];
+      out << YAML::Key << "2dY" << YAML::Value << sf.second.accel[1];
+      out << YAML::Key << "2dZ" << YAML::Value << sf.second.accel[2];
       out << YAML::EndMap;
       
       out << YAML::EndMap;
