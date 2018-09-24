@@ -8,9 +8,6 @@
  * 
  */
 
-// class definitions
-#include "gpmf_to_yaml.hpp"
-
 // basic stuff
 #include <stdlib.h>
 #include <stdio.h>
@@ -23,7 +20,8 @@
 namespace gpmf_to_yaml
 {
 
-  converter::converter(bool verbose):_extractor(verbose)
+  template<class T>
+  converter<T>::converter(bool verbose):_extractor(verbose)
   {
     // init some members
     _ms = &_metadata_stream;
@@ -31,12 +29,13 @@ namespace gpmf_to_yaml
     _verbose = verbose; //verbose is false by default
   }
 
-  converter::converter(const std::string& in,
-                       const std::string& out_dir, 
-                       const float fr,
-                       bool verbose):_input(in),_output_dir(out_dir),
-                                     _fr(fr),_verbose(verbose),
-                                     _extractor(_input,_output_dir,verbose)
+  template<class T>
+  converter<T>::converter(const std::string& in,
+                          const std::string& out_dir,
+                          const float fr,
+                           bool verbose):_input(in),_output_dir(out_dir),
+                                         _fr(fr),_verbose(verbose),
+                                         _extractor(_input,_output_dir,verbose)
 
   {
     // init some members
@@ -44,7 +43,8 @@ namespace gpmf_to_yaml
     _payload = NULL;
   }
 
-  int32_t converter::init()
+  template<class T>
+  int32_t converter<T>::init()
   {
     // init some members
     _ms = &_metadata_stream;
@@ -78,10 +78,11 @@ namespace gpmf_to_yaml
     return CONV_OK;
   }
 
-  int32_t converter::init(const std::string& in,
-                          const std::string& out_dir, 
-                          const float fr,
-                          const uint32_t idx_offset)
+  template<class T>
+  int32_t converter<T>::init(const std::string& in,
+                             const std::string& out_dir,
+                             const float fr,
+                             const uint32_t idx_offset)
   {
     // reload args into members
     _input = in;
@@ -96,7 +97,8 @@ namespace gpmf_to_yaml
     return ret;
   }
 
-  int32_t converter::run(YAML::Emitter & out)
+  template<class T>
+  int32_t converter<T>::run(YAML::Emitter & out)
   {
     int32_t ret = CONV_OK;
     
@@ -146,12 +148,14 @@ namespace gpmf_to_yaml
     return ret;
   }
 
-  int32_t converter::get_offset()
+  template<class T>
+  int32_t converter<T>::get_offset()
   {
     return _idx_offset;
   }
 
-  int32_t converter::cleanup()
+  template<class T>
+  int32_t converter<T>::cleanup()
   {
     if (_payload) FreePayload(_payload);
     _payload = NULL;
@@ -159,13 +163,15 @@ namespace gpmf_to_yaml
 
     // empty the maps
     _gps.clear();
-    _accel.clear ();
+    _accl.clear ();
+    _gyro.clear ();
 
     return CONV_OK;
   }
 
   // intermediate functions
-  int32_t converter::gpmf_to_maps()
+  template<class T>
+  int32_t converter<T>::gpmf_to_maps()
   {
     int32_t ret = CONV_OK;
 
@@ -256,12 +262,16 @@ namespace gpmf_to_yaml
           switch (GPMF_Key (_ms))
           {
             case STR2FOURCC ("ACCL"):
-              process_accel (index);
+              process_tag (index, _accl);
+              break;
+
+            case STR2FOURCC ("GYRO"):
+              process_tag (index, _gyro);
               break;
 
             case STR2FOURCC ("GPS5"):
             case STR2FOURCC ("GPRI"):
-              process_gps (index);
+              process_tag (index, _gps);
               break;
           }
         }
@@ -275,7 +285,8 @@ namespace gpmf_to_yaml
     return ret;
   }
 
-  void converter::process_accel(const uint32_t index)
+  template<class T>
+  void converter<T>::process_tag(const uint32_t index, std::map<float,std::vector<T> >& out)
   {
     const char     aType         = GPMF_Type            (_ms);
     const uint32_t aComponentsNb = GPMF_ElementsInStruct(_ms);
@@ -313,19 +324,19 @@ namespace gpmf_to_yaml
       {
         DEBUG("%c%c%c%c ", PRINTF_4CC(GPMF_Key (_ms)));
 
-        std::vector<float> accel_sample;
+        std::vector<T> sample;
 
         //get timestamp for that sample
-        double accel_rate,accel_start,accel_end;
-        accel_rate = 1/GetGPMFSampleRateAndTimes(_mp4, _ms, 0.0, index, &accel_start, &accel_end);
-        _accel[accel_start+accel_rate*i]=accel_sample;
+        double rate,start,end;
+        rate = 1/GetGPMFSampleRateAndTimes(_mp4, _ms, 0.0, index, &start, &end);
+        out[start+rate*i]=sample;
 
         //get all value for that sample (lat, long, etc)
-        DEBUG("TIME: %.3fs - ",accel_start+accel_rate*i);
+        DEBUG("TIME: %.3fs - ",start+rate*i);
         for (uint32_t j = 0; j < aComponentsNb; j++)
         {
-          _accel[accel_start+accel_rate*i].push_back(aBuffer[i * aComponentsNb + j]);
-          DEBUG("%.6f%s, " ,_accel[accel_start+accel_rate*i][j], &aUnitsBuffer[j % aUnitSamplesNb]);
+          out[start+rate*i].push_back(aBuffer[i * aComponentsNb + j]);
+          DEBUG("%.6f%s, " ,out[start+rate*i][j], &aUnitsBuffer[j % aUnitSamplesNb]);
         }
         DEBUG("\n");
       }
@@ -334,66 +345,9 @@ namespace gpmf_to_yaml
       free (aBuffer);
     }
   }
-
-  void converter::process_gps(const uint32_t index)
-  {
-    uint32_t samples = GPMF_Repeat(_ms);
-    uint32_t elements = GPMF_ElementsInStruct(_ms);
-    uint32_t buffersize = samples * elements * sizeof(float);
-    GPMF_stream find_stream;
-    float *ptr, *tmpbuffer = static_cast<float*>(malloc(buffersize));
-    char units[10][6] = { "" };
-    uint32_t unit_samples = 1;
-
-    if (tmpbuffer && samples)
-    {
-      uint32_t i, j;
-
-      //Search for any units to display
-      GPMF_CopyState(_ms, &find_stream);
-      if (GPMF_OK == GPMF_FindPrev(&find_stream, GPMF_KEY_SI_UNITS, GPMF_CURRENT_LEVEL) ||
-        GPMF_OK == GPMF_FindPrev(&find_stream, GPMF_KEY_UNITS, GPMF_CURRENT_LEVEL))
-      {
-        char *data = (char *)GPMF_RawData(&find_stream);
-        int ssize = GPMF_StructSize(&find_stream);
-        unit_samples = GPMF_Repeat(&find_stream);
-
-        for (i = 0; i < unit_samples; i++)
-        {
-          memcpy(units[i], data, ssize);
-          units[i][ssize] = 0;
-          data += ssize;
-        }
-      }
-
-      //GPMF_FormattedData(_ms, tmpbuffer, buffersize, 0, samples); // Output data in LittleEnd, but no scale
-      GPMF_ScaledData(_ms, tmpbuffer, buffersize, 0, samples, GPMF_TYPE_FLOAT);  //Output scaled data as floats
-
-      ptr = tmpbuffer;
-      for (i = 0; i < samples; i++)
-      {
-        // create gps_sample to store in map
-        std::vector<float> gps_sample;
-
-        //get timestamp for that sample
-        double gps_rate,gps_start,gps_end;
-        gps_rate = 1/GetGPMFSampleRateAndTimes(_mp4, _ms, 0.0, index, &gps_start, &gps_end);
-        _gps[gps_start+gps_rate*i]=gps_sample;
-
-        //get all value for that sample (lat, long, etc)
-        DEBUG("TIME: %.3fs - ",gps_start+gps_rate*i);
-        for (j = 0; j < elements; j++)
-        {
-          _gps[gps_start+gps_rate*i].push_back(*ptr++);
-          DEBUG("%.6f%s, " ,_gps[gps_start+gps_rate*i][j], units[j%unit_samples]);
-        }
-        DEBUG("\n");
-      }
-      free(tmpbuffer);
-    }
-  }
   
-  int32_t converter::populate_images(YAML::Emitter & out)
+  template<class T>
+  int32_t converter<T>::populate_images(YAML::Emitter & out)
   {
     int32_t ret = CONV_OK;
 
@@ -401,7 +355,7 @@ namespace gpmf_to_yaml
     float step = 1.0 / _fr; // timestep
     float real_ts; // real timestamp from image capture
     std::string name;  // name of exported image
-    sensorframe_t sf; // sensor frame for each image
+    sensorframe_t<T> sf; // sensor frame for each image
 
     uint32_t idx = 0;
     uint32_t skipped = 0;
@@ -435,8 +389,9 @@ namespace gpmf_to_yaml
       // (interpolated gps, and other sensors will be populated later)
       sf.ts = real_ts+_idx_offset*step;
 
-      interpolate_data (sf.ts, _gps,   sf.gps);
-      interpolate_data (sf.ts, _accel, sf.accel);
+      interpolate_data (sf.ts, _gps,  sf.gps);
+      interpolate_data (sf.ts, _accl, sf.accel);
+      interpolate_data (sf.ts, _gyro, sf.gyro);
 
       sensorframes_to_yaml(out, name, sf, (idx == 0));
 
@@ -448,7 +403,8 @@ namespace gpmf_to_yaml
     return ret;
   }
   
-  void converter::interpolate_data(float ts, std::map<float,std::vector<float> >& in, float* out)
+  template<class T>
+  void converter<T>::interpolate_data(float ts, std::map<float,std::vector<T> >& in, T* out)
   {
     /*
       Get gps info right before and right after that timestamp.
@@ -458,7 +414,7 @@ namespace gpmf_to_yaml
       same for gopro sensor data. Also the astronomical chance that a sensor
       ts coincides with sample time of image.
     */
-    float prev_ts=in.begin()->first, next_ts=in.rbegin()->first, delta_ts;
+    T prev_ts=in.begin()->first, next_ts=in.rbegin()->first, delta_ts;
 
     // this covers the general case (middle of file) and the coincidence
     for(auto const& sample: in)
@@ -493,7 +449,7 @@ namespace gpmf_to_yaml
       if(next_ts>prev_ts)
       {
         delta_ts = next_ts - prev_ts; // delta ts
-        float m = (in[next_ts][i] - in[prev_ts][i]) / delta_ts;
+        T m = (in[next_ts][i] - in[prev_ts][i]) / delta_ts;
         out[i] = in[prev_ts][i] + m * (ts - prev_ts);
       }
       else
@@ -507,10 +463,11 @@ namespace gpmf_to_yaml
     }
   }
   
-  int32_t converter::sensorframes_to_yaml(YAML::Emitter&       out,
-                                          const std::string&   name,
-                                          const sensorframe_t& sf,
-                                          const bool           first)
+  template<class T>
+  int32_t converter<T>::sensorframes_to_yaml(YAML::Emitter&          out,
+                                             const std::string&      name,
+                                             const sensorframe_t<T>& sf,
+                                             const bool              first)
   {
 
     int32_t ret = CONV_OK;
@@ -544,13 +501,22 @@ namespace gpmf_to_yaml
     out << YAML::Key << "3dv"  << YAML::Value << sf.gps[4];
     out << YAML::EndMap;
 
-    out << YAML::Key << "accel";
+    out << YAML::Key << "accl";
     out << YAML::Value;
 
     out << YAML::BeginMap;
     out << YAML::Key << "2dX" << YAML::Value << sf.accel[0];
     out << YAML::Key << "2dY" << YAML::Value << sf.accel[1];
     out << YAML::Key << "2dZ" << YAML::Value << sf.accel[2];
+    out << YAML::EndMap;
+
+    out << YAML::Key << "gyro";
+    out << YAML::Value;
+
+    out << YAML::BeginMap;
+    out << YAML::Key << "oX" << YAML::Value << sf.gyro[0];
+    out << YAML::Key << "oY" << YAML::Value << sf.gyro[1];
+    out << YAML::Key << "oZ" << YAML::Value << sf.gyro[2];
     out << YAML::EndMap;
 
     out << YAML::EndMap;
@@ -560,7 +526,8 @@ namespace gpmf_to_yaml
   }
 
   // destructor
-  converter::~converter()
+  template<class T>
+  converter<T>::~converter()
   {
   }  
 

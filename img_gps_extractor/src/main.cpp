@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
       {
         std::cerr << "ERROR: Output directory can't be created. Exiting..." << std::endl;
         return gp_yml::CONV_OUTPUT_NON_EXISTENT;
-      } 
+      }
     }
 
     // check for frame-rate yaml
@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
   out << YAML::BeginMap;
 
   // create a converter instance
-  gp_yml::converter parser(verbose);
+  gp_yml::converter<float> parser(verbose);
 
   //loop for all files in the file list and convert
   uint32_t offset=0;

@@ -45,19 +45,22 @@ namespace gpmf_to_yaml
     CONV_INVALID_STRUCT,
   }CONV_RET;
 
-  typedef struct
+  template<class T>
+  struct sensorframe_t
   {
     float ts; // timestamp in seconds (from video start)
-    float gps[5]; // GPS data (lat deg, long deg, altitude m , 2D ground speed m/s, 3D speed m/s)
+    T gps[5]; // GPS data (lat deg, long deg, altitude m , 2D ground speed m/s, 3D speed m/s)
     //gpst // GPS time (UTC)
     //gpsf // GPS fix? 0-no lock. 2 or 3, 2D or 3D lock
     //gpsp // GPS precision: Under 300 is good (tipically around 5m to 10m)
-    //gyro // IMU Gyroscope data rad/s
-    float accel[3]; // IMU Accelerometer data m/s²
+    T gyro[3];  // IMU Gyroscope data rad/s
+    T accel[3]; // IMU Accelerometer data m/s²
     //isog // ISO gain (dimensionless)
     //ss // shutter speed in seconds
-  }sensorframe_t;
+  };
 
+
+  template<class T>
   class converter
   {
     public:
@@ -82,17 +85,18 @@ namespace gpmf_to_yaml
       // intermediate functions
       int32_t gpmf_to_maps(); // take in stream and build maps
       int32_t populate_images(YAML::Emitter & out); // get still images at desired framerate
-      int32_t sensorframes_to_yaml(YAML::Emitter&       out,
-                                   const std::string&   name,
-                                   const sensorframe_t& sf,
-                                   const bool           first); // output desired yaml
-      void process_accel(const uint32_t index);
-      void process_gps(const uint32_t index);
-      void interpolate_data(float ts, std::map<float,std::vector<float> >& in, float* out);
+      int32_t sensorframes_to_yaml(YAML::Emitter&          out,
+                                   const std::string&      name,
+                                   const sensorframe_t<T>& sf,
+                                   const bool              first); // output desired yaml
+
+      void process_tag (const uint32_t index, std::map<float,std::vector<T> >& out);
+      void interpolate_data(float ts, std::map<float,std::vector<T> >& in, T* out);
 
       // maps for parsed values
-      std::map<float,std::vector<float> > _gps; //ts is key, gps data is value
-      std::map<float,std::vector<float> > _accel; //ts is key, accel data is value
+      std::map<float,std::vector<T> > _gps;  //ts is key, gps data is value
+      std::map<float,std::vector<T> > _accl; //ts is key, accl data is value
+      std::map<float,std::vector<T> > _gyro; //ts is key, gyro data is value
 
       //map for interpolated values
       uint32_t _n_images; // final number of images in database
@@ -106,5 +110,7 @@ namespace gpmf_to_yaml
   };
 
 }
+
+#include "gpmf_to_yaml_impl.hpp"
 
 #endif // _GPMF_TO_YAML_
