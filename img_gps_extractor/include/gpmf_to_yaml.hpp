@@ -43,6 +43,14 @@ namespace gpmf_to_yaml
     CONV_INVALID_STRUCT,
   }CONV_RET;
 
+  typedef enum
+  {
+    TAG_GPS  = 0x1,
+    TAG_GYRO = 0x2,
+    TAG_ACCL = 0x4,
+    TAG_ALL  = TAG_GPS | TAG_GYRO | TAG_ACCL
+  }TAG;
+
   template<class T>
   struct sensorframe_t
   {
@@ -68,7 +76,7 @@ namespace gpmf_to_yaml
       int32_t init(); //re-init parsing with same parameters
       int32_t init(const std::string& in, const std::string& out_dir,float fr,const uint32_t idx_offset=0); //init parsing changing parameters
       int32_t cleanup(); //cleanup and exit
-      int32_t run(gpmf_io::printer* out); //run conversion
+      int32_t run(gpmf_io::printer* out, const uint16_t flags = TAG_ALL); //run conversion
       int32_t get_offset(); //offset for next run
 
     private:
@@ -81,11 +89,12 @@ namespace gpmf_to_yaml
       
       // intermediate functions
       int32_t gpmf_to_maps(); // take in stream and build maps
-      int32_t populate_images(gpmf_io::printer* out); // get still images at desired framerate
+      int32_t populate_images(gpmf_io::printer* out, const uint16_t flags = TAG_ALL); // get still images at desired framerate
       int32_t sensorframes_to_yaml(gpmf_io::printer*       out,
                                    const std::string&      name,
                                    const sensorframe_t<T>& sf,
-                                   const bool              first); // output desired yaml
+                                   const bool              first,
+                                   const uint16_t          flags = TAG_ALL); // output desired yaml
 
       void process_tag (const uint32_t index, std::map<float,std::vector<T> >& out);
       void interpolate_data(float ts, std::map<float,std::vector<T> >& in, T* out);

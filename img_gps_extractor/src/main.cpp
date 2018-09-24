@@ -17,7 +17,7 @@ namespace fs = boost::filesystem;
 #include "gpmf_to_yaml.hpp"
 namespace gp_yml = gpmf_to_yaml;
 
-#include "printer_yaml.hpp"
+#include "printer_factory.hpp"
 
 //config file
 #include "config.h"
@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
   bool verbose=false;
 
   // arguments
-  std::string input_file,input_directory,output_dir;
+  std::string input_file,input_directory,output_dir,output_metadata_file;
   float framerate = 1; // 1Hz by default
 
   // parser for command line options
@@ -42,7 +42,8 @@ int main(int argc, char *argv[])
     ("verbose,v", "Verbose") 
     ("input,i",po::value<std::string>(), "Input video with metadata")
     ("directory,d",po::value<std::string>(), "Input directory with partial metadata videos (from one run)")
-    ("output,o",po::value<std::string>(), "Output directory for yaml and images")
+    ("output,o",po::value<std::string>(), "Output directory for images")
+    ("output_metafile,m",po::value<std::string>(), "Output metadata file")
     ("framerate,f",po::value<float>() ,"Frame rate for image extraction and metadata interpolation"); 
 
   // parse args
@@ -116,6 +117,17 @@ int main(int argc, char *argv[])
         std::cerr << "ERROR: Output directory can't be created. Exiting..." << std::endl;
         return gp_yml::CONV_OUTPUT_NON_EXISTENT;
       }
+    }
+
+    if (vm.count("output_metafile")==0)
+    {
+      std::cerr << "ERROR: Output metadata file is necessary. Exiting..." << std::endl;
+      return gp_yml::CONV_OUTPUT_NON_EXISTENT;
+    }
+    else
+    {
+      output_metadata_file.assign(vm["output_metafile"].as<std::string>());
+      std::cout << "Output metadata file: " << output_metadata_file << std::endl;
     }
 
     // check for frame-rate yaml
@@ -203,8 +215,14 @@ int main(int argc, char *argv[])
 
   // Open the metadata file and start the map
   // create yaml file
-  gpmf_io::printer_yaml out (output_dir+"/metadata.yaml");
-  out.Begin();
+  std::unique_ptr<gpmf_io::printer> out = gpmf_io::printer_factory::create(output_metadata_file);
+  if (out == nullptr)
+  {
+    std::cerr << "ERROR: Unsupported format of output metadata file. Exiting..." << std::endl;
+    return gp_yml::CONV_CANT_CREATE_OUTPUT;
+  }
+
+  out->Begin();
 
   // create a converter instance
   gp_yml::converter<float> parser(verbose);
@@ -228,7 +246,7 @@ int main(int argc, char *argv[])
     // run the conversion
     std::cout << std::endl << "Run conversion" << std::endl
               << sh_sep << std::endl;
-    ret = parser.run(&out);
+    ret = parser.run(out.get(), gp_yml::TAG_ACCL | gp_yml::TAG_GYRO);
     if(ret)
     {
       std::cerr << "ERROR running conversion. Exiting" << std::endl;
@@ -245,7 +263,7 @@ int main(int argc, char *argv[])
   }
 
   // output yaml to file
-  out.End();
+  out->End();
   //exit
   return gp_yml::CONV_OK;
   

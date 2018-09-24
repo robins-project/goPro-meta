@@ -32,6 +32,7 @@ include_directories("${PROJECT_SOURCE_DIR}/include")
 # add executable for main app
 file(GLOB CXXSRC
      ${PROJECT_SOURCE_DIR}/src/mp4_img_extractor.cpp
+     ${PROJECT_SOURCE_DIR}/src/printer_factory.cpp
      ${PROJECT_SOURCE_DIR}/src/main.cpp)
 file(GLOB CSRC
      ${PROJ_ROOT}/extlib/gpmf-parser/GPMF_parser.c

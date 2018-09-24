@@ -98,7 +98,7 @@ namespace gpmf_to_yaml
   }
 
   template<class T>
-  int32_t converter<T>::run(gpmf_io::printer* out)
+  int32_t converter<T>::run(gpmf_io::printer* out, const uint16_t flags)
   {
     int32_t ret = CONV_OK;
     
@@ -134,7 +134,7 @@ namespace gpmf_to_yaml
     std::cout << "Interpolating sensors and populating sensor frames..." << std::endl;
     // create yaml database in the output folder with the metadata for each img
     std::cout << "Creating metadata yaml dict..." << std::endl;
-    ret = populate_images(out);
+    ret = populate_images(out, flags);
     if(ret)
     {
       std::cout << "Error populating images. Exiting..." << std::endl;
@@ -347,7 +347,7 @@ namespace gpmf_to_yaml
   }
   
   template<class T>
-  int32_t converter<T>::populate_images(gpmf_io::printer* out)
+  int32_t converter<T>::populate_images(gpmf_io::printer* out, const uint16_t flags)
   {
     int32_t ret = CONV_OK;
 
@@ -389,11 +389,16 @@ namespace gpmf_to_yaml
       // (interpolated gps, and other sensors will be populated later)
       sf.ts = real_ts+_idx_offset*step;
 
-      interpolate_data (sf.ts, _gps,  sf.gps);
-      interpolate_data (sf.ts, _accl, sf.accl);
-      interpolate_data (sf.ts, _gyro, sf.gyro);
+      if (flags & TAG_GPS)
+        interpolate_data (sf.ts, _gps,  sf.gps);
 
-      sensorframes_to_yaml(out, name, sf, (idx == 0));
+      if (flags & TAG_ACCL)
+        interpolate_data (sf.ts, _accl, sf.accl);
+
+      if (flags & TAG_GYRO)
+        interpolate_data (sf.ts, _gyro, sf.gyro);
+
+      sensorframes_to_yaml(out, name, sf, (idx == 0), flags);
 
       DEBUG("ts: %.5f, real ts: %.5f, name: %s\n\n",timestep+_idx_offset*step,sf.ts,name.c_str());
       idx++;
@@ -467,7 +472,8 @@ namespace gpmf_to_yaml
   int32_t converter<T>::sensorframes_to_yaml(gpmf_io::printer*       out,
                                              const std::string&      name,
                                              const sensorframe_t<T>& sf,
-                                             const bool              first)
+                                             const bool              first,
+                                             const uint16_t          flags)
   {
     int32_t ret = CONV_OK;
     if (out != nullptr)
@@ -475,6 +481,7 @@ namespace gpmf_to_yaml
       //comments with some info about the program run
       //put every sensor frame in yaml file
       // create entry for the file name
+      out->BeginGroup();
       out->Header(name);
 
       // if it is the first video of this file, comment where it was taken
@@ -487,34 +494,44 @@ namespace gpmf_to_yaml
       out->Begin();
       out->Record("ts", sf.ts);
 
-      // output gps data
-      out->Header("gps");
+      if (flags & TAG_GPS)
+      {
+        // output gps data
+        out->Header("gps");
 
-      out->Begin();
-      out->Record("lat" , sf.gps[0]);
-      out->Record("long", sf.gps[1]);
-      out->Record("alt" , sf.gps[2]);
-      out->Record("2dv" , sf.gps[3]);
-      out->Record("3dv" , sf.gps[4]);
+        out->Begin();
+        out->Record("lat" , sf.gps[0]);
+        out->Record("long", sf.gps[1]);
+        out->Record("alt" , sf.gps[2]);
+        out->Record("2dv" , sf.gps[3]);
+        out->Record("3dv" , sf.gps[4]);
+        out->End();
+      }
+
+      if (flags & TAG_GYRO)
+      {
+        out->Header("gyro");
+
+        out->Begin();
+        out->Record("oX", sf.gyro[0]);
+        out->Record("oY", sf.gyro[1]);
+        out->Record("oZ", sf.gyro[2]);
+        out->End();
+      }
+
+      if (flags & TAG_ACCL)
+      {
+        out->Header("accl");
+
+        out->Begin();
+        out->Record("2dX", sf.accl[0]);
+        out->Record("2dY", sf.accl[1]);
+        out->Record("2dZ", sf.accl[2]);
+        out->End();
+      }
+
       out->End();
-
-      out->Header("accl");
-
-      out->Begin();
-      out->Record("2dX", sf.accl[0]);
-      out->Record("2dY", sf.accl[1]);
-      out->Record("2dZ", sf.accl[2]);
-      out->End();
-
-      out->Header("gyro");
-
-      out->Begin();
-      out->Record("oX", sf.gyro[0]);
-      out->Record("oY", sf.gyro[1]);
-      out->Record("oZ", sf.gyro[2]);
-      out->End();
-
-      out->End();
+      out->EndGroup();
     }
 
     return ret;
