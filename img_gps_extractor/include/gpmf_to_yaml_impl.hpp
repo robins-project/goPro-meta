@@ -98,7 +98,7 @@ namespace gpmf_to_yaml
   }
 
   template<class T>
-  int32_t converter<T>::run(YAML::Emitter & out)
+  int32_t converter<T>::run(gpmf_io::printer* out)
   {
     int32_t ret = CONV_OK;
     
@@ -347,7 +347,7 @@ namespace gpmf_to_yaml
   }
   
   template<class T>
-  int32_t converter<T>::populate_images(YAML::Emitter & out)
+  int32_t converter<T>::populate_images(gpmf_io::printer* out)
   {
     int32_t ret = CONV_OK;
 
@@ -390,7 +390,7 @@ namespace gpmf_to_yaml
       sf.ts = real_ts+_idx_offset*step;
 
       interpolate_data (sf.ts, _gps,  sf.gps);
-      interpolate_data (sf.ts, _accl, sf.accel);
+      interpolate_data (sf.ts, _accl, sf.accl);
       interpolate_data (sf.ts, _gyro, sf.gyro);
 
       sensorframes_to_yaml(out, name, sf, (idx == 0));
@@ -464,62 +464,58 @@ namespace gpmf_to_yaml
   }
   
   template<class T>
-  int32_t converter<T>::sensorframes_to_yaml(YAML::Emitter&          out,
+  int32_t converter<T>::sensorframes_to_yaml(gpmf_io::printer*       out,
                                              const std::string&      name,
                                              const sensorframe_t<T>& sf,
                                              const bool              first)
   {
-
     int32_t ret = CONV_OK;
-
-    //comments with some info about the program run
-    //put every sensor frame in yaml file
-    // create entry for the file name
-    out << YAML::Key << name;
-    out << YAML::Value;
-
-    // if it is the first video of this file, comment where it was taken
-    if(first)
+    if (out != nullptr)
     {
-      out << YAML::Comment("Original File: "+_input+", Frame rate: "+std::to_string(_fr));
+      //comments with some info about the program run
+      //put every sensor frame in yaml file
+      // create entry for the file name
+      out->Header(name);
+
+      // if it is the first video of this file, comment where it was taken
+      if(first)
+      {
+        out->Comment("Original File: "+_input+", Frame rate: "+std::to_string(_fr));
+      }
+
+      // create timestamp
+      out->Begin();
+      out->Record("ts", sf.ts);
+
+      // output gps data
+      out->Header("gps");
+
+      out->Begin();
+      out->Record("lat" , sf.gps[0]);
+      out->Record("long", sf.gps[1]);
+      out->Record("alt" , sf.gps[2]);
+      out->Record("2dv" , sf.gps[3]);
+      out->Record("3dv" , sf.gps[4]);
+      out->End();
+
+      out->Header("accl");
+
+      out->Begin();
+      out->Record("2dX", sf.accl[0]);
+      out->Record("2dY", sf.accl[1]);
+      out->Record("2dZ", sf.accl[2]);
+      out->End();
+
+      out->Header("gyro");
+
+      out->Begin();
+      out->Record("oX", sf.gyro[0]);
+      out->Record("oY", sf.gyro[1]);
+      out->Record("oZ", sf.gyro[2]);
+      out->End();
+
+      out->End();
     }
-
-    // create timestamp
-    out << YAML::BeginMap;
-    out << YAML::Key << "ts";
-    out << YAML::Value << sf.ts;
-
-    // output gps data
-    out << YAML::Key << "gps";
-    out << YAML::Value;
-
-    out << YAML::BeginMap;
-    out << YAML::Key << "lat"  << YAML::Value << sf.gps[0];
-    out << YAML::Key << "long" << YAML::Value << sf.gps[1];
-    out << YAML::Key << "alt"  << YAML::Value << sf.gps[2];
-    out << YAML::Key << "2dv"  << YAML::Value << sf.gps[3];
-    out << YAML::Key << "3dv"  << YAML::Value << sf.gps[4];
-    out << YAML::EndMap;
-
-    out << YAML::Key << "accl";
-    out << YAML::Value;
-
-    out << YAML::BeginMap;
-    out << YAML::Key << "2dX" << YAML::Value << sf.accel[0];
-    out << YAML::Key << "2dY" << YAML::Value << sf.accel[1];
-    out << YAML::Key << "2dZ" << YAML::Value << sf.accel[2];
-    out << YAML::EndMap;
-
-    out << YAML::Key << "gyro";
-    out << YAML::Value;
-
-    out << YAML::BeginMap;
-    out << YAML::Key << "oX" << YAML::Value << sf.gyro[0];
-    out << YAML::Key << "oY" << YAML::Value << sf.gyro[1];
-    out << YAML::Key << "oZ" << YAML::Value << sf.gyro[2];
-    out << YAML::EndMap;
-
-    out << YAML::EndMap;
 
     return ret;
 

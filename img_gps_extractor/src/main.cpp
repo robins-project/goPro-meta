@@ -17,6 +17,8 @@ namespace fs = boost::filesystem;
 #include "gpmf_to_yaml.hpp"
 namespace gp_yml = gpmf_to_yaml;
 
+#include "printer_yaml.hpp"
+
 //config file
 #include "config.h"
 
@@ -201,11 +203,8 @@ int main(int argc, char *argv[])
 
   // Open the metadata file and start the map
   // create yaml file
-  YAML::Emitter out;
-  std::fstream fs;
-  std::string filename=output_dir+"/metadata.yaml";
-  fs.open(filename, std::fstream::out);
-  out << YAML::BeginMap;
+  gpmf_io::printer_yaml out (output_dir+"/metadata.yaml");
+  out.Begin();
 
   // create a converter instance
   gp_yml::converter<float> parser(verbose);
@@ -229,7 +228,7 @@ int main(int argc, char *argv[])
     // run the conversion
     std::cout << std::endl << "Run conversion" << std::endl
               << sh_sep << std::endl;
-    ret = parser.run(out);
+    ret = parser.run(&out);
     if(ret)
     {
       std::cerr << "ERROR running conversion. Exiting" << std::endl;
@@ -246,10 +245,7 @@ int main(int argc, char *argv[])
   }
 
   // output yaml to file
-  out << YAML::EndMap;
-  fs << out.c_str();
-  // close the file
-  fs.close();
+  out.End();
   //exit
   return gp_yml::CONV_OK;
   

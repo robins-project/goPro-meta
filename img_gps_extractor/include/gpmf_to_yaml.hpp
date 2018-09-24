@@ -17,6 +17,7 @@
 #include <map>
 #include <vector>
 #include "common.hpp"
+#include "printer.hpp"
 
 // includes for metadata parsing
 #include "GPMF_parser.h"
@@ -26,9 +27,6 @@ extern "C" void PrintGPMF(GPMF_stream *ms);
 // opencv stuff to get images
 #include "mp4_img_extractor.hpp"
 namespace img_extr = mp4_img_extractor;
-
-// libyaml stuff
-#include "yaml-cpp/yaml.h"
 
 namespace gpmf_to_yaml
 {
@@ -53,8 +51,8 @@ namespace gpmf_to_yaml
     //gpst // GPS time (UTC)
     //gpsf // GPS fix? 0-no lock. 2 or 3, 2D or 3D lock
     //gpsp // GPS precision: Under 300 is good (tipically around 5m to 10m)
-    T gyro[3];  // IMU Gyroscope data rad/s
-    T accel[3]; // IMU Accelerometer data m/s²
+    T gyro[3]; // IMU Gyroscope data rad/s
+    T accl[3]; // IMU Accelerometer data m/s²
     //isog // ISO gain (dimensionless)
     //ss // shutter speed in seconds
   };
@@ -70,7 +68,7 @@ namespace gpmf_to_yaml
       int32_t init(); //re-init parsing with same parameters
       int32_t init(const std::string& in, const std::string& out_dir,float fr,const uint32_t idx_offset=0); //init parsing changing parameters
       int32_t cleanup(); //cleanup and exit
-      int32_t run(YAML::Emitter & out); //run conversion
+      int32_t run(gpmf_io::printer* out); //run conversion
       int32_t get_offset(); //offset for next run
 
     private:
@@ -80,12 +78,11 @@ namespace gpmf_to_yaml
       img_extr::img_extractor _extractor;
       bool _verbose;
       uint32_t _idx_offset;
-      YAML::Emitter _out;
       
       // intermediate functions
       int32_t gpmf_to_maps(); // take in stream and build maps
-      int32_t populate_images(YAML::Emitter & out); // get still images at desired framerate
-      int32_t sensorframes_to_yaml(YAML::Emitter&          out,
+      int32_t populate_images(gpmf_io::printer* out); // get still images at desired framerate
+      int32_t sensorframes_to_yaml(gpmf_io::printer*       out,
                                    const std::string&      name,
                                    const sensorframe_t<T>& sf,
                                    const bool              first); // output desired yaml
