@@ -18,6 +18,7 @@
 #include <string>
 #include <iostream>
 #include "common.hpp"
+#include "image.hpp"
 
 namespace mp4_img_extractor
 {
@@ -31,6 +32,7 @@ namespace mp4_img_extractor
     EXTR_CANT_FRAME_OUT_OF_BOUNDS,
   }EXTR_RET;
 
+  template<class T>
   class img_extractor
   {
     public:
@@ -39,17 +41,26 @@ namespace mp4_img_extractor
       ~img_extractor();
       int32_t init();
       int32_t init(const std::string& in, const std::string& out_dir);
-      int32_t get_frame(float ts, float & real_ts, uint32_t idx, std::string &name);
+
+      template<class N>
+      int32_t get_frame(T ts, T & real_ts, uint32_t idx, image<N>& frame);
+
+      inline const T& fps() const
+      {
+        return _fps;
+      }
 
     private:
       std::string _input;
       std::string _output_dir;
       cv::VideoCapture _cap;
-      cv::Mat _frame;
-      float _duration;
+      T _fps;
+      T _duration;
       bool _verbose;
   };
 
 }
+
+#include "mp4_img_extractor_impl.hpp"
 
 #endif // _MP4_IMG_EXTRACTOR_H_

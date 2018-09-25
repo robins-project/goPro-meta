@@ -16,12 +16,13 @@
 #include <iostream> 
 #include <string> 
 #include <fstream>
+#include "image.hpp"
 
 namespace gpmf_to_yaml
 {
 
-  template<class T>
-  converter<T>::converter(bool verbose):_extractor(verbose)
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  converter<T, N, time_proxy, name_proxy>::converter(bool verbose):_extractor(verbose)
   {
     // init some members
     _ms = &_metadata_stream;
@@ -29,13 +30,14 @@ namespace gpmf_to_yaml
     _verbose = verbose; //verbose is false by default
   }
 
-  template<class T>
-  converter<T>::converter(const std::string& in,
-                          const std::string& out_dir,
-                          const float fr,
-                           bool verbose):_input(in),_output_dir(out_dir),
-                                         _fr(fr),_verbose(verbose),
-                                         _extractor(_input,_output_dir,verbose)
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  converter<T, N, time_proxy, name_proxy>::converter(
+    const std::string& in,
+    const std::string& out_dir,
+    const T fr,
+     bool verbose):_input(in),_output_dir(out_dir),
+                   _fr(fr),_verbose(verbose),
+                   _extractor(_input,_output_dir,verbose)
 
   {
     // init some members
@@ -43,8 +45,8 @@ namespace gpmf_to_yaml
     _payload = NULL;
   }
 
-  template<class T>
-  int32_t converter<T>::init()
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  int32_t converter<T, N, time_proxy, name_proxy>::init()
   {
     // init some members
     _ms = &_metadata_stream;
@@ -78,11 +80,12 @@ namespace gpmf_to_yaml
     return CONV_OK;
   }
 
-  template<class T>
-  int32_t converter<T>::init(const std::string& in,
-                             const std::string& out_dir,
-                             const float fr,
-                             const uint32_t idx_offset)
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  int32_t converter<T, N, time_proxy, name_proxy>::init(
+    const std::string& in,
+    const std::string& out_dir,
+    const T fr,
+    const uint32_t idx_offset)
   {
     // reload args into members
     _input = in;
@@ -93,15 +96,23 @@ namespace gpmf_to_yaml
     
     // init
     int ret = init();
+    if (ret == CONV_OK)
+    {
+      if (!(_fr > 0.))
+      {
+        _fr = _extractor.fps();
+        DEBUG("Frame rate is negative, using fps instead %f.\n",_fr);
+      }
+    }
 
     return ret;
   }
 
-  template<class T>
-  int32_t converter<T>::run(gpmf_io::printer* out, const uint16_t flags)
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  int32_t converter<T, N, time_proxy, name_proxy>::run(gpmf_io::printer* out, const uint16_t flags)
   {
     int32_t ret = CONV_OK;
-    
+
     /*
      * Our intention is to sub-sample at a specific frame rate, so 
      * we will:
@@ -148,14 +159,14 @@ namespace gpmf_to_yaml
     return ret;
   }
 
-  template<class T>
-  int32_t converter<T>::get_offset()
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  int32_t converter<T, N, time_proxy, name_proxy>::get_offset()
   {
     return _idx_offset;
   }
 
-  template<class T>
-  int32_t converter<T>::cleanup()
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  int32_t converter<T, N, time_proxy, name_proxy>::cleanup()
   {
     if (_payload) FreePayload(_payload);
     _payload = NULL;
@@ -170,8 +181,8 @@ namespace gpmf_to_yaml
   }
 
   // intermediate functions
-  template<class T>
-  int32_t converter<T>::gpmf_to_maps()
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  int32_t converter<T, N, time_proxy, name_proxy>::gpmf_to_maps()
   {
     int32_t ret = CONV_OK;
 
@@ -285,8 +296,8 @@ namespace gpmf_to_yaml
     return ret;
   }
 
-  template<class T>
-  void converter<T>::process_tag(const uint32_t index, std::map<float,std::vector<T> >& out)
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  void converter<T, N, time_proxy, name_proxy>::process_tag(const uint32_t index, std::map<N,std::vector<T> >& out)
   {
     const char     aType         = GPMF_Type            (_ms);
     const uint32_t aComponentsNb = GPMF_ElementsInStruct(_ms);
@@ -329,14 +340,17 @@ namespace gpmf_to_yaml
         //get timestamp for that sample
         double rate,start,end;
         rate = 1/GetGPMFSampleRateAndTimes(_mp4, _ms, 0.0, index, &start, &end);
-        out[start+rate*i]=sample;
+
+        N startTime = _timeProxy.get(start);
+        N time      = static_cast<N>(startTime+rate*i);
+        out[time]   = sample;
 
         //get all value for that sample (lat, long, etc)
-        DEBUG("TIME: %.3fs - ",start+rate*i);
+        DEBUG("TIME: %.3fs - ", time);
         for (uint32_t j = 0; j < aComponentsNb; j++)
         {
-          out[start+rate*i].push_back(aBuffer[i * aComponentsNb + j]);
-          DEBUG("%.6f%s, " ,out[start+rate*i][j], &aUnitsBuffer[j % aUnitSamplesNb]);
+          out[time].push_back(aBuffer[i * aComponentsNb + j]);
+          DEBUG("%.6f%s, " ,out[time][j], &aUnitsBuffer[j % aUnitSamplesNb]);
         }
         DEBUG("\n");
       }
@@ -346,30 +360,31 @@ namespace gpmf_to_yaml
     }
   }
   
-  template<class T>
-  int32_t converter<T>::populate_images(gpmf_io::printer* out, const uint16_t flags)
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  int32_t converter<T, N, time_proxy, name_proxy>::populate_images(gpmf_io::printer* out, const uint16_t flags)
   {
     int32_t ret = CONV_OK;
 
-    float ts = 0.0;
-    float step = 1.0 / _fr; // timestep
-    float real_ts; // real timestamp from image capture
-    std::string name;  // name of exported image
-    sensorframe_t<T> sf; // sensor frame for each image
+    T step = 1.0 / _fr; // timestep
+    T real_ts; // real timestamp from image capture
+    img_extr::image<N> img(_verbose);
+    sensorframe_t<T, N> sf; // sensor frame for each image
 
     uint32_t idx = 0;
+    uint32_t frame_idx = 0;
     uint32_t skipped = 0;
     while(true)
     {
-      float timestep = ts+idx*step;
-      ret = _extractor.get_frame(timestep,real_ts,_idx_offset+idx,name);
+      T timestep = idx*step;
+      frame_idx = _idx_offset+idx;
+      ret = _extractor.get_frame(timestep,real_ts,frame_idx,img);
       if(ret == img_extr::EXTR_CANT_FRAME_OUT_OF_BOUNDS)
       {
         DEBUG("Done populating, we are off bounds.\n");
         _n_images = idx - skipped;
         DEBUG("Number of images extracted for database is %u.\n",_n_images);
         //final offset for next batch of files
-        _idx_offset+=idx;
+        _idx_offset = frame_idx;
         return CONV_OK;
       }
       else if(ret == img_extr::EXTR_SKIPPING_FRAME)
@@ -379,15 +394,21 @@ namespace gpmf_to_yaml
         skipped++;
         continue;
       }
-
       else if(ret)
       {
         DEBUG("ERROR GETTING FRAME\n");
         return CONV_ERROR;
       }
+
       // populate a sensor frame for each image and put only timestamp for now
       // (interpolated gps, and other sensors will be populated later)
-      sf.ts = real_ts+_idx_offset*step;
+      sf.ts = _timeProxy.get(real_ts+_idx_offset*step);
+      img.timestamp() = sf.ts;
+      img.index()     = frame_idx;
+
+
+      std::string name = _nameProxy.get(img) + ".jpg";
+      img.save(_output_dir + "/" + name);
 
       if (flags & TAG_GPS)
         interpolate_data (sf.ts, _gps,  sf.gps);
@@ -400,16 +421,16 @@ namespace gpmf_to_yaml
 
       sensorframes_to_yaml(out, name, sf, (idx == 0), flags);
 
-      DEBUG("ts: %.5f, real ts: %.5f, name: %s\n\n",timestep+_idx_offset*step,sf.ts,name.c_str());
+      DEBUG("ts: %.5f, real ts: %.5f, name: %s\n\n",timestep+_idx_offset*step,static_cast<T>(sf.ts),name.c_str());
       idx++;
     }
     //final offset for next batch of files
-    _idx_offset+=idx;
+    _idx_offset = frame_idx;
     return ret;
   }
   
-  template<class T>
-  void converter<T>::interpolate_data(float ts, std::map<float,std::vector<T> >& in, T* out)
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  void converter<T, N, time_proxy, name_proxy>::interpolate_data(N ts, std::map<N,std::vector<T> >& in, T* out)
   {
     /*
       Get gps info right before and right after that timestamp.
@@ -419,7 +440,7 @@ namespace gpmf_to_yaml
       same for gopro sensor data. Also the astronomical chance that a sensor
       ts coincides with sample time of image.
     */
-    T prev_ts=in.begin()->first, next_ts=in.rbegin()->first, delta_ts;
+    N prev_ts=in.begin()->first, next_ts=in.rbegin()->first, delta_ts;
 
     // this covers the general case (middle of file) and the coincidence
     for(auto const& sample: in)
@@ -468,12 +489,13 @@ namespace gpmf_to_yaml
     }
   }
   
-  template<class T>
-  int32_t converter<T>::sensorframes_to_yaml(gpmf_io::printer*       out,
-                                             const std::string&      name,
-                                             const sensorframe_t<T>& sf,
-                                             const bool              first,
-                                             const uint16_t          flags)
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  int32_t converter<T, N, time_proxy, name_proxy>::sensorframes_to_yaml(
+    gpmf_io::printer*          out,
+    const std::string&         name,
+    const sensorframe_t<T, N>& sf,
+    const bool                 first,
+    const uint16_t          flags)
   {
     int32_t ret = CONV_OK;
     if (out != nullptr)
@@ -539,8 +561,8 @@ namespace gpmf_to_yaml
   }
 
   // destructor
-  template<class T>
-  converter<T>::~converter()
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
+  converter<T, N, time_proxy, name_proxy>::~converter()
   {
   }  
 

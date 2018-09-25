@@ -45,6 +45,11 @@ namespace gpmf_io
       _out << YAML::BeginMap;
     }
 
+    virtual void Record(const std::string& name, const uint64_t value)
+    {
+      _out << YAML::Key << name << YAML::Value << value;
+    }
+
     virtual void Record(const std::string& name, const float  value)
     {
       _out << YAML::Key << name << YAML::Value << value;

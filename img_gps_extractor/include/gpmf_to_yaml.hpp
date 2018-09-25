@@ -51,10 +51,10 @@ namespace gpmf_to_yaml
     TAG_ALL  = TAG_GPS | TAG_GYRO | TAG_ACCL
   }TAG;
 
-  template<class T>
+  template<class T, class N>
   struct sensorframe_t
   {
-    float ts; // timestamp in seconds (from video start)
+    N ts; // timestamp in seconds (from video start)
     T gps[5]; // GPS data (lat deg, long deg, altitude m , 2D ground speed m/s, 3D speed m/s)
     //gpst // GPS time (UTC)
     //gpsf // GPS fix? 0-no lock. 2 or 3, 2D or 3D lock
@@ -66,15 +66,15 @@ namespace gpmf_to_yaml
   };
 
 
-  template<class T>
+  template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
   class converter
   {
     public:
       converter(bool verbose=false);
-      converter(const std::string& in, const std::string& out_dir,float fr,bool verbose);
+      converter(const std::string& in, const std::string& out_dir,T fr,bool verbose);
       ~converter();
       int32_t init(); //re-init parsing with same parameters
-      int32_t init(const std::string& in, const std::string& out_dir,float fr,const uint32_t idx_offset=0); //init parsing changing parameters
+      int32_t init(const std::string& in, const std::string& out_dir,T fr,const uint32_t idx_offset=0); //init parsing changing parameters
       int32_t cleanup(); //cleanup and exit
       int32_t run(gpmf_io::printer* out, const uint16_t flags = TAG_ALL); //run conversion
       int32_t get_offset(); //offset for next run
@@ -82,27 +82,27 @@ namespace gpmf_to_yaml
     private:
       std::string _input;
       std::string _output_dir;  
-      float _fr;
-      img_extr::img_extractor _extractor;
+      T _fr;
+      img_extr::img_extractor<T> _extractor;
       bool _verbose;
       uint32_t _idx_offset;
       
       // intermediate functions
       int32_t gpmf_to_maps(); // take in stream and build maps
       int32_t populate_images(gpmf_io::printer* out, const uint16_t flags = TAG_ALL); // get still images at desired framerate
-      int32_t sensorframes_to_yaml(gpmf_io::printer*       out,
-                                   const std::string&      name,
-                                   const sensorframe_t<T>& sf,
-                                   const bool              first,
-                                   const uint16_t          flags = TAG_ALL); // output desired yaml
+      int32_t sensorframes_to_yaml(gpmf_io::printer*          out,
+                                   const std::string&         name,
+                                   const sensorframe_t<T, N>& sf,
+                                   const bool                 first,
+                                   const uint16_t             flags = TAG_ALL); // output desired yaml
 
-      void process_tag (const uint32_t index, std::map<float,std::vector<T> >& out);
-      void interpolate_data(float ts, std::map<float,std::vector<T> >& in, T* out);
+      void process_tag (const uint32_t index, std::map<N,std::vector<T> >& out);
+      void interpolate_data(N ts, std::map<N,std::vector<T> >& in, T* out);
 
       // maps for parsed values
-      std::map<float,std::vector<T> > _gps;  //ts is key, gps data is value
-      std::map<float,std::vector<T> > _accl; //ts is key, accl data is value
-      std::map<float,std::vector<T> > _gyro; //ts is key, gyro data is value
+      std::map<N,std::vector<T> > _gps;  //ts is key, gps data is value
+      std::map<N,std::vector<T> > _accl; //ts is key, accl data is value
+      std::map<N,std::vector<T> > _gyro; //ts is key, gyro data is value
 
       //map for interpolated values
       uint32_t _n_images; // final number of images in database
@@ -113,6 +113,8 @@ namespace gpmf_to_yaml
       double _metadatalength;
       uint32_t *_payload; //buffer to store GPMF samples from the MP4.
 
+      time_proxy<T, N> _timeProxy;
+      name_proxy<N>    _nameProxy;
   };
 
 }

@@ -18,6 +18,7 @@ namespace fs = boost::filesystem;
 namespace gp_yml = gpmf_to_yaml;
 
 #include "printer_factory.hpp"
+#include "proxy.hpp"
 
 //config file
 #include "config.h"
@@ -225,7 +226,7 @@ int main(int argc, char *argv[])
   out->Begin();
 
   // create a converter instance
-  gp_yml::converter<float> parser(verbose);
+  gp_yml::converter<float, uint64_t, gpmf_proxy::time_proxy, gpmf_proxy::name_proxy> parser(verbose);
 
   //loop for all files in the file list and convert
   uint32_t offset=0;

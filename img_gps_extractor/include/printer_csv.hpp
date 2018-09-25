@@ -38,14 +38,19 @@ namespace gpmf_io
     {
     }
 
+    virtual void Record(const std::string& name, const uint64_t value)
+    {
+      _out << value << ',';
+    }
+
     virtual void Record(const std::string& name, const float  value)
     {
-      _out << value << '\t';
+      _out << value << ',';
     }
 
     virtual void Record(const std::string& name, const double value)
     {
-      _out << value << '\t';
+      _out << value << ',';
     }
 
     virtual void End()
