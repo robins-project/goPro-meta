@@ -22,9 +22,9 @@ configure_file (
 include_directories("${PROJECT_BINARY_DIR}")
 
 # add gpmf-parser include dirs
-include_directories("${PROJ_ROOT}/extlib/gpmf-parser/")
-include_directories("${PROJ_ROOT}/extlib/gpmf-parser/demo")
-include_directories("${PROJ_ROOT}/extlib/gpmf-parser/include")
+include_directories("${PROJECT_SOURCE_DIR}/../extlib/gpmf-parser/")
+include_directories("${PROJECT_SOURCE_DIR}/../extlib/gpmf-parser/demo")
+include_directories("${PROJECT_SOURCE_DIR}/../extlib/gpmf-parser/include")
 
 # add include to include dirs
 include_directories("${PROJECT_SOURCE_DIR}/include")
@@ -35,9 +35,9 @@ file(GLOB CXXSRC
      ${PROJECT_SOURCE_DIR}/src/printer_factory.cpp
      ${PROJECT_SOURCE_DIR}/src/main.cpp)
 file(GLOB CSRC
-     ${PROJ_ROOT}/extlib/gpmf-parser/GPMF_parser.c
-     ${PROJ_ROOT}/extlib/gpmf-parser/demo/GPMF_mp4reader.c
-     ${PROJ_ROOT}/extlib/gpmf-parser/demo/GPMF_print.c)
+     ${PROJECT_SOURCE_DIR}/extlib/../gpmf-parser/GPMF_parser.c
+     ${PROJECT_SOURCE_DIR}/extlib/../gpmf-parser/demo/GPMF_mp4reader.c
+     ${PROJECT_SOURCE_DIR}/extlib/../gpmf-parser/demo/GPMF_print.c
 add_executable(img_gps_extractor ${CSRC} ${CXXSRC})
 
 # link libraries
@@ -72,9 +72,3 @@ if (OpenCV_FOUND)
   # message("OpenCV LIB: ${OpenCV_LIBRARIES}")
   message("-- OpenCV found! Version: ${OpenCV_VERSION}")
 endif (OpenCV_FOUND)
-
-find_package (catkin REQUIRED COMPONENTS rosbag roscpp topic_tools)
-catkin_package(INCLUDE_DIRS include CATKIN_DEPENDS rosbag roscpp topic_tools)
-include_directories (${catkin_INCLUDE_DIRS})
-target_link_libraries (${PROJECT_NAME} ${catkin_LIBRARIES})
-add_dependencies (${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
