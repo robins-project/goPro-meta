@@ -37,7 +37,7 @@ file(GLOB CXXSRC
 file(GLOB CSRC
      ${PROJECT_SOURCE_DIR}/extlib/../gpmf-parser/GPMF_parser.c
      ${PROJECT_SOURCE_DIR}/extlib/../gpmf-parser/demo/GPMF_mp4reader.c
-     ${PROJECT_SOURCE_DIR}/extlib/../gpmf-parser/demo/GPMF_print.c
+     ${PROJECT_SOURCE_DIR}/extlib/../gpmf-parser/demo/GPMF_print.c)
 add_executable(img_gps_extractor ${CSRC} ${CXXSRC})
 
 # link libraries
