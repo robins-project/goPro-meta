@@ -31,13 +31,12 @@ include_directories("${PROJECT_SOURCE_DIR}/include")
 
 # add executable for main app
 file(GLOB CXXSRC
-     ${PROJECT_SOURCE_DIR}/src/mp4_img_extractor.cpp
      ${PROJECT_SOURCE_DIR}/src/printer_factory.cpp
      ${PROJECT_SOURCE_DIR}/src/main.cpp)
 file(GLOB CSRC
-     ${PROJECT_SOURCE_DIR}/extlib/../gpmf-parser/GPMF_parser.c
-     ${PROJECT_SOURCE_DIR}/extlib/../gpmf-parser/demo/GPMF_mp4reader.c
-     ${PROJECT_SOURCE_DIR}/extlib/../gpmf-parser/demo/GPMF_print.c)
+     ${PROJECT_SOURCE_DIR}/../extlib/gpmf-parser/GPMF_parser.c
+     ${PROJECT_SOURCE_DIR}/../extlib/gpmf-parser/demo/GPMF_mp4reader.c
+     ${PROJECT_SOURCE_DIR}/../extlib/gpmf-parser/demo/GPMF_print.c)
 add_executable(img_gps_extractor ${CSRC} ${CXXSRC})
 
 # link libraries
