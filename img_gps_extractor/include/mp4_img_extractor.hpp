@@ -39,22 +39,22 @@ namespace mp4_img_extractor
       img_extractor(bool verbose=false);
       img_extractor(const std::string& in, const std::string& out_dir,bool verbose);
       ~img_extractor();
-      int32_t init();
-      int32_t init(const std::string& in, const std::string& out_dir);
+      int32_t init(const T fr);
+      int32_t init(const std::string& in, const std::string& out_dir, const T fr);
 
       template<class N>
-      int32_t get_frame(T ts, T & real_ts, uint32_t idx, image<N>& frame);
+      int32_t get_frame(T ts, T & real_ts, image<N>& frame);
 
-      inline const T& fps() const
+      inline const T& fr() const
       {
-        return _fps;
+        return _fr;
       }
 
     private:
       std::string _input;
       std::string _output_dir;
       cv::VideoCapture _cap;
-      T _fps;
+      T _fr;
       T _duration;
       bool _verbose;
   };

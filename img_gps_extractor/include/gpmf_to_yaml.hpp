@@ -71,9 +71,9 @@ namespace gpmf_to_yaml
   {
     public:
       converter(bool verbose=false);
-      converter(const std::string& in, const std::string& out_dir,T fr,bool verbose);
+      converter(const std::string& in, const std::string& out_dir,bool verbose);
       ~converter();
-      int32_t init(); //re-init parsing with same parameters
+      int32_t init(const T fr); //re-init parsing with same parameters
       int32_t init(const std::string& in, const std::string& out_dir,T fr,const uint32_t idx_offset=0); //init parsing changing parameters
       int32_t cleanup(); //cleanup and exit
       int32_t run(gpmf_io::printer* out, const uint16_t flags = TAG_ALL); //run conversion
@@ -82,7 +82,6 @@ namespace gpmf_to_yaml
     private:
       std::string _input;
       std::string _output_dir;  
-      T _fr;
       img_extr::img_extractor<T> _extractor;
       bool _verbose;
       uint32_t _idx_offset;

@@ -22,7 +22,8 @@ namespace mp4_img_extractor
                                const std::string& out_dir,
                                bool verbose):
                                _input(in),_output_dir(out_dir),
-                               _verbose(verbose),_cap(_input)
+                               _verbose(verbose),_cap(_input),
+                               _fr(1)
   {
   }
 
@@ -32,7 +33,7 @@ namespace mp4_img_extractor
   }
   
   template<class T>
-  int32_t img_extractor<T>::init()
+  int32_t img_extractor<T>::init(const T fr)
   {
     if(!_cap.isOpened())
     {
@@ -48,16 +49,23 @@ namespace mp4_img_extractor
 
     T frames = _cap.get(CV_CAP_PROP_FRAME_COUNT);
     DEBUG("There are %f frames in the video.\n",frames);
-    _fps = _cap.get(CV_CAP_PROP_FPS);
-    DEBUG("Fps is %f for video.\n",_fps);
-    _duration = frames / _fps;
+    T fps = _cap.get(CV_CAP_PROP_FPS);
+    DEBUG("Fps is %f for video.\n",fps);
+    _duration = frames / fps;
     DEBUG("Duration of video is %f.\n",_duration);
+
+    _fr = fr;
+    if (!(_fr > 0.))
+    {
+      _fr = fps;
+      DEBUG("Frame rate is negative, using fps instead %f.\n",_fr);
+    }
 
     return EXTR_OK;
   }
 
   template<class T>
-  int32_t img_extractor<T>::init(const std::string& in, const std::string& out_dir)
+  int32_t img_extractor<T>::init(const std::string& in, const std::string& out_dir, const T fr)
   {
     _input = in;
     _output_dir = out_dir;
@@ -65,7 +73,7 @@ namespace mp4_img_extractor
     _cap = cv::VideoCapture(_input);
 
     // init
-    int ret = init();
+    int ret = init(fr);
 
     return ret;
   }
@@ -75,40 +83,50 @@ namespace mp4_img_extractor
   // the filename
   template<class T>
   template<class N>
-  int32_t img_extractor<T>::get_frame(T ts, T & real_ts, uint32_t idx, image<N>& frame)
+  int32_t img_extractor<T>::get_frame(T ts, T & real_ts, image<N>& frame)
   {
     int ret = EXTR_OK;
 
-    // Check if timestamp is within boundaries
-    if(ts > _duration)
-    {
-      DEBUG("Frame %f requested is out of bounds. Exiting\n",ts);
-      return EXTR_CANT_FRAME_OUT_OF_BOUNDS;
-    }
-
     // timestamp comes in seconds, and opencv works in ms, so convert:
-    T timestamp = ts * 1000;
+    real_ts = ts * 1000;
+    const T fps  = _cap.get(CV_CAP_PROP_FPS);
+    const T diff = 1. / fps;
 
-    // set the timestamp in video to obtain frame
-    _cap.set(CV_CAP_PROP_POS_MSEC,timestamp);
-    DEBUG("Setting timestamp to %.5f\n",timestamp);
-
-    // get real timestamp to return
-    real_ts = _cap.get(CV_CAP_PROP_POS_MSEC);
-    DEBUG("Real timestamp set to %.5f\n",real_ts);
-  
-    // get frame
-    cv::Mat& cvFrame = frame.get();
-    std::clock_t begin_time = std::clock();
-    _cap >> cvFrame;
+    if (_fr < fps)
+    {
+      // set the timestamp in video to obtain frame
+      _cap.set(CV_CAP_PROP_POS_MSEC,real_ts);
+      DEBUG("Setting timestamp to %.5f\n",real_ts);
+    }
 
     // if frame was not captured, try again n times
     int tries=1;
-    while(cvFrame.empty() && tries<=50)
+    std::clock_t begin_time = std::clock();
+
+    // get frame
+    cv::Mat& cvFrame = frame.get();
+    while(cvFrame.empty() && tries <= 50)
     {
-      DEBUG("Frame skipped trying again for %d time: Real timestamp set to %.5f\n",tries,real_ts);
-      real_ts = _cap.get(CV_CAP_PROP_POS_MSEC);
+      // Check if timestamp is within boundaries
+      if(std::abs(real_ts - _duration * 1000) < diff)
+      {
+        DEBUG("Frame %f requested is out of bounds. Exiting\n",real_ts);
+        return EXTR_CANT_FRAME_OUT_OF_BOUNDS;
+      }
+
       _cap >> cvFrame;
+
+      // get real timestamp to return
+      real_ts = _cap.get(CV_CAP_PROP_POS_MSEC);
+      if(cvFrame.empty() && tries > 1)
+      {
+        DEBUG("Frame skipped trying again for %d time: Real timestamp set to %.5f\n",tries, real_ts);
+      }
+      else
+      {
+        DEBUG("Real timestamp set to %.5f\n",real_ts);
+      }
+
       tries++;
     }
 

@@ -34,10 +34,9 @@ namespace gpmf_to_yaml
   converter<T, N, time_proxy, name_proxy>::converter(
     const std::string& in,
     const std::string& out_dir,
-    const T fr,
-     bool verbose):_input(in),_output_dir(out_dir),
-                   _fr(fr),_verbose(verbose),
-                   _extractor(_input,_output_dir,verbose)
+    bool verbose):_input(in),_output_dir(out_dir),
+                  _verbose(verbose),
+                  _extractor(_input,_output_dir,verbose)
 
   {
     // init some members
@@ -46,7 +45,7 @@ namespace gpmf_to_yaml
   }
 
   template<class T, class N, template <class T, class N> class time_proxy, template <class N> class name_proxy>
-  int32_t converter<T, N, time_proxy, name_proxy>::init()
+  int32_t converter<T, N, time_proxy, name_proxy>::init(const T fr)
   {
     // init some members
     _ms = &_metadata_stream;
@@ -66,7 +65,7 @@ namespace gpmf_to_yaml
     }
 
     // init the frame extractor
-    int ret = _extractor.init();
+    int ret = _extractor.init(fr);
     if(ret)
     {
       std::cerr << "Couldn't open mp4 video. Exiting..." << std::endl;
@@ -90,20 +89,11 @@ namespace gpmf_to_yaml
     // reload args into members
     _input = in;
     _output_dir = out_dir;
-    _fr = fr;
-    _extractor.init(_input,_output_dir);
+    _extractor.init(_input,_output_dir, fr);
     _idx_offset = idx_offset;
     
     // init
-    int ret = init();
-    if (ret == CONV_OK)
-    {
-      if (!(_fr > 0.))
-      {
-        _fr = _extractor.fps();
-        DEBUG("Frame rate is negative, using fps instead %f.\n",_fr);
-      }
-    }
+    int ret = init(fr);
 
     return ret;
   }
@@ -365,9 +355,8 @@ namespace gpmf_to_yaml
   {
     int32_t ret = CONV_OK;
 
-    T step = 1.0 / _fr; // timestep
+    T step = 1.0 / _extractor.fr(); // timestep
     T real_ts; // real timestamp from image capture
-    img_extr::image<N> img(_verbose);
     sensorframe_t<T, N> sf; // sensor frame for each image
 
     uint32_t idx = 0;
@@ -377,7 +366,9 @@ namespace gpmf_to_yaml
     {
       T timestep = idx*step;
       frame_idx = _idx_offset+idx;
-      ret = _extractor.get_frame(timestep,real_ts,frame_idx,img);
+
+      img_extr::image<N> img(_verbose);
+      ret = _extractor.get_frame(timestep,real_ts,img);
       if(ret == img_extr::EXTR_CANT_FRAME_OUT_OF_BOUNDS)
       {
         DEBUG("Done populating, we are off bounds.\n");
@@ -509,7 +500,7 @@ namespace gpmf_to_yaml
       // if it is the first video of this file, comment where it was taken
       if(first)
       {
-        out->Comment("Original File: "+_input+", Frame rate: "+std::to_string(_fr));
+        out->Comment("Original File: "+_input+", Frame rate: "+std::to_string(_extractor.fr()));
       }
 
       // create timestamp
