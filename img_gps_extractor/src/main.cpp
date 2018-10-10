@@ -35,6 +35,7 @@ int main(int argc, char *argv[])
   // arguments
   std::string input_file,input_directory,output_dir,output_metadata_file;
   float framerate = 1; // 1Hz by default
+  int   imurate   = 0;
 
   // parser for command line options
   po::options_description desc("Options"); 
@@ -45,7 +46,8 @@ int main(int argc, char *argv[])
     ("directory,d",po::value<std::string>(), "Input directory with partial metadata videos (from one run)")
     ("output,o",po::value<std::string>(), "Output directory for images")
     ("output_metafile,m",po::value<std::string>(), "Output metadata file")
-    ("framerate,f",po::value<float>() ,"Frame rate for image extraction and metadata interpolation"); 
+    ("framerate,f",po::value<float>() ,"Frame rate for image extraction and metadata interpolation")
+    ("imurate,r",po::value<int>() ,"Number of metadata slices between frames");
 
   // parse args
   po::variables_map vm; 
@@ -143,6 +145,19 @@ int main(int argc, char *argv[])
       framerate = vm["framerate"].as<float>();
       std::cout << "Frame-rate: " << framerate << " fps" << std::endl;  
     }
+
+    // check for imu-rate yaml
+    if(vm.count("imurate")==0)
+    {
+      //use default
+      std::cout << "IMU-rate: " << imurate << " fps (default)" << std::endl;
+    }
+    else
+    {
+      // frame-rate desired by user
+      imurate = std::max(0, vm["imurate"].as<int>());
+      std::cout << "IMU-rate: " << imurate << " fps" << std::endl;
+    }
     std::cout << sep << std::endl;
 
     // verbose output
@@ -236,7 +251,7 @@ int main(int argc, char *argv[])
     std::cout << sep << std::endl;
     std::cout << "Init conversion for file: " << f << std::endl;
     std::cout << sh_sep << std::endl;
-    ret = parser.init(f,output_dir,framerate,offset);
+    ret = parser.init(f,output_dir,framerate,imurate,offset);
     if(ret)
     {
       std::cerr << "ERROR initializing conversion. Exiting" << std::endl;

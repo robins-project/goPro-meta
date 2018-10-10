@@ -13,6 +13,11 @@ namespace gpmf_proxy
     {
       return timestamp;
     }
+
+    N as_diff(const T& timestamp)
+    {
+      return timestamp;
+    }
   };
 
   template<class T>
@@ -27,6 +32,12 @@ namespace gpmf_proxy
     uint64_t get(const T& timestamp)
     {
       return _offset + std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::duration<T>(timestamp)).count();
+    }
+
+    uint64_t as_diff(const T& timestamp)
+    {
+      return std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::duration<T>(timestamp)).count();
     }
 
@@ -51,6 +62,7 @@ namespace gpmf_proxy
 
       return name;
     }
+
   };
 
   template<>

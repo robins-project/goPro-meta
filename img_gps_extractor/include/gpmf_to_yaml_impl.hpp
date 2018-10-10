@@ -84,6 +84,7 @@ namespace gpmf_to_yaml
     const std::string& in,
     const std::string& out_dir,
     const T fr,
+    const int ifr,
     const uint32_t idx_offset)
   {
     // reload args into members
@@ -91,6 +92,7 @@ namespace gpmf_to_yaml
     _output_dir = out_dir;
     _extractor.init(_input,_output_dir, fr);
     _idx_offset = idx_offset;
+    _ifr = ifr;
     
     // init
     int ret = init(fr);
@@ -332,7 +334,8 @@ namespace gpmf_to_yaml
         rate = 1/GetGPMFSampleRateAndTimes(_mp4, _ms, 0.0, index, &start, &end);
 
         N startTime = _timeProxy.get(start);
-        N time      = static_cast<N>(startTime+rate*i);
+        N rateTime  = _timeProxy.as_diff(rate);
+        N time      = static_cast<N>(startTime+rateTime*i);
         out[time]   = sample;
 
         //get all value for that sample (lat, long, etc)
@@ -355,9 +358,11 @@ namespace gpmf_to_yaml
   {
     int32_t ret = CONV_OK;
 
-    T step = 1.0 / _extractor.fr(); // timestep
+    T step     = 1.0  / _extractor.fr(); // timestep
     T real_ts; // real timestamp from image capture
     sensorframe_t<T, N> sf; // sensor frame for each image
+
+    N prev_ts = 0.0;
 
     uint32_t idx = 0;
     uint32_t frame_idx = 0;
@@ -393,24 +398,31 @@ namespace gpmf_to_yaml
 
       // populate a sensor frame for each image and put only timestamp for now
       // (interpolated gps, and other sensors will be populated later)
-      sf.ts = _timeProxy.get(real_ts+_idx_offset*step);
-      img.timestamp() = sf.ts;
+      N timestamp     = _timeProxy.get(real_ts+_idx_offset*step);
+      img.timestamp() = timestamp;
       img.index()     = frame_idx;
-
 
       std::string name = _nameProxy.get(img) + ".jpg";
       img.save(_output_dir + "/" + name);
 
-      if (flags & TAG_GPS)
-        interpolate_data (sf.ts, _gps,  sf.gps);
 
-      if (flags & TAG_ACCL)
-        interpolate_data (sf.ts, _accl, sf.accl);
+      N imu_step = (timestamp - prev_ts) / (_ifr + static_cast<N>(1));
+      for (int i = (idx == 0) ? _ifr : 0; i <= _ifr; ++i)
+      {
+        sf.ts = (i == _ifr) ? timestamp : prev_ts + (i + 1) * imu_step;
+        if (flags & TAG_GPS)
+          interpolate_data (sf.ts, _gps,  sf.gps);
 
-      if (flags & TAG_GYRO)
-        interpolate_data (sf.ts, _gyro, sf.gyro);
+        if (flags & TAG_ACCL)
+          interpolate_data (sf.ts, _accl, sf.accl);
 
-      sensorframes_to_yaml(out, name, sf, (idx == 0), flags);
+        if (flags & TAG_GYRO)
+          interpolate_data (sf.ts, _gyro, sf.gyro);
+
+        sensorframes_to_yaml(out, name, sf, (idx == 0), flags);
+      }
+
+      prev_ts = timestamp;
 
       DEBUG("ts: %.5f, real ts: %.5f, name: %s\n\n",timestep+_idx_offset*step,static_cast<T>(sf.ts),name.c_str());
       idx++;

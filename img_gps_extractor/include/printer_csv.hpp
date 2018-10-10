@@ -18,6 +18,7 @@ namespace gpmf_io
     {
       std::fstream fs;
       fs.open(_filename, std::fstream::out);
+      fs << "timestamp,omega_x,omega_y,omega_z,alpha_x,alpha_y,alpha_z" << std::endl;
       fs << _out.str().c_str();
       fs.close();
     }

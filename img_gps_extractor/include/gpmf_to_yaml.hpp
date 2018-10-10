@@ -74,7 +74,7 @@ namespace gpmf_to_yaml
       converter(const std::string& in, const std::string& out_dir,bool verbose);
       ~converter();
       int32_t init(const T fr); //re-init parsing with same parameters
-      int32_t init(const std::string& in, const std::string& out_dir,T fr,const uint32_t idx_offset=0); //init parsing changing parameters
+      int32_t init(const std::string& in, const std::string& out_dir,const T fr,const int ifr,const uint32_t idx_offset=0); //init parsing changing parameters
       int32_t cleanup(); //cleanup and exit
       int32_t run(gpmf_io::printer* out, const uint16_t flags = TAG_ALL); //run conversion
       int32_t get_offset(); //offset for next run
@@ -105,6 +105,7 @@ namespace gpmf_to_yaml
 
       //map for interpolated values
       uint32_t _n_images; // final number of images in database
+      int _ifr;
 
       // gpmf data
       GPMF_stream _metadata_stream, *_ms;
