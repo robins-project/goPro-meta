@@ -53,7 +53,21 @@ video.mp4 at a frame rate of 3fps, and it saves images and yaml file to folder
   $ mkdir build && cd build
   $ cmake ..
   $ make -j
-  $ ./img_gps_extractor -i video.mp4 -f 3 -o /tmp/output
+  $ ./img_gps_extractor -i video.mp4 -f 3 -o /tmp/output -m /tmp/output/out.yaml
+```
+
+User is able to extract images using frame rate specified in video file
+by setting corresponding parameter to negative value.
+
+In addition to yaml, csv files are supported. Its format is suitable for 
+kalibr_bagcreater and described in [Bag format](https://github.com/ethz-asl/kalibr/wiki/bag-format).
+
+On user's choise, extractor can add an extra records of IMU data between 
+image frames using -r parameter (not tested for yaml format). By default,
+IMU data is exported one record per frame, without intermediate entries.  
+
+```sh
+  $ ./img_gps_extractor -i video.mp4 -f -1 -r 5 -o /tmp/output -m /tmp/output/out.csv
 ```
 
 As a design choice, the GoPro never saves videos bigger than 4Gb (not even when 
@@ -67,7 +81,7 @@ to merge them externally (not even ffmpeg is currently able to merge gopro video
 keeping the metadata):
 
 ```sh
-  $ ./img_gps_extractor -d /tmp/input -f 3 -o /tmp/output
+  $ ./img_gps_extractor -d /tmp/input -f 3 -o /tmp/output -m /tmp/output/out.yaml
 ```
 
 The directory should look something like this:
