@@ -47,9 +47,9 @@ namespace mp4_img_extractor
       DEBUG("Opened cv capture successfully...\n");
     }
 
-    T frames = _cap.get(CV_CAP_PROP_FRAME_COUNT);
+    T frames = _cap.get(cv::CAP_PROP_FRAME_COUNT);
     DEBUG("There are %f frames in the video.\n",frames);
-    T fps = _cap.get(CV_CAP_PROP_FPS);
+    T fps = _cap.get(cv::CAP_PROP_FPS);
     DEBUG("Fps is %f for video.\n",fps);
     _duration = frames / fps;
     DEBUG("Duration of video is %f.\n",_duration);
@@ -89,13 +89,13 @@ namespace mp4_img_extractor
 
     // timestamp comes in seconds, and opencv works in ms, so convert:
     real_ts = ts * 1000;
-    const T fps  = _cap.get(CV_CAP_PROP_FPS);
+    const T fps  = _cap.get(cv::CAP_PROP_FPS);
     const T diff = 1. / fps;
 
     if (_fr < fps)
     {
       // set the timestamp in video to obtain frame
-      _cap.set(CV_CAP_PROP_POS_MSEC,real_ts);
+      _cap.set(cv::CAP_PROP_POS_MSEC,real_ts);
       DEBUG("Setting timestamp to %.5f\n",real_ts);
     }
 
@@ -108,7 +108,7 @@ namespace mp4_img_extractor
     while(cvFrame.empty() && tries <= 50)
     {
       // Check if timestamp is within boundaries
-      if(std::abs(real_ts - _duration * 1000) < diff)
+      if(_duration * 1000 - real_ts < diff)
       {
         DEBUG("Frame %f requested is out of bounds. Exiting\n",real_ts);
         return EXTR_CANT_FRAME_OUT_OF_BOUNDS;
@@ -117,7 +117,7 @@ namespace mp4_img_extractor
       _cap >> cvFrame;
 
       // get real timestamp to return
-      real_ts = _cap.get(CV_CAP_PROP_POS_MSEC);
+      real_ts = _cap.get(cv::CAP_PROP_POS_MSEC);
       if(cvFrame.empty() && tries > 1)
       {
         DEBUG("Frame skipped trying again for %d time: Real timestamp set to %.5f\n",tries, real_ts);

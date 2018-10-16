@@ -63,7 +63,7 @@ if (yaml-cpp_FOUND)
 endif (yaml-cpp_FOUND)
 
 # opencv
-find_package(OpenCV 2.4.9.1 REQUIRED)
+find_package(OpenCV REQUIRED)
 if (OpenCV_FOUND)
   include_directories(${OpenCV_INCLUDE_DIRS})
   # message("OpenCV INCLUDE: ${OpenCV_INCLUDE_DIRS}")
